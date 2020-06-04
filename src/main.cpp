@@ -103,50 +103,6 @@ int main(int argc, char* argv[])
 		std::cout << prefix << "Done\n";
 
 		comm.barrier();
-
-		/*
-		std::array<std::array<int,DIM>, DIM> matrix;
-		std::cout << prefix << "sizeof(matrix) = " << sizeof(matrix) << " (" << sizeof(matrix)/(DIM*DIM) << ")\n";
-		*/
-
-		//MpiOp mpi_op_1(mpi_sum_contiguous<double>, true );
-		//std::function<void(double*,double*,int*,MPI_Datatype*)> my_func = mpi_sum_contiguous<double>;
-		//std::function<void(double*,double*,int*,MPI_Datatype*)> my_func( mpi_sum_contiguous<double> );
-		//MpiOp mpi_op_1(my_func, true);
-		//MpiOp mpi_op_1(std::function<void(double*,double*,int*,MPI_Datatype*)>(mpi_sum_contiguous<double>), true );
-		//MpiOp mpi_op_2;
-
-		/*
-		MPI_Aint extent;
-		MPI_Type_extent(this->mpi_datatype_, &extent);
-		std::cout << " REGISTERED EXTENT " << extent << "\n";
-		*/
-
-		/*
-		int entry = 0;
-		const auto& map = MpiCommunicator::mpi_datatype_map_;
-		for ( auto it = map.begin(); it != map.end(); ++it ) {
-			++entry;
-
-			// Handle to underlying type
-			MPI_Datatype& data_type = const_cast<MPI_Datatype&>( it->second.get_MPI_Datatype() );
-
-			// Get extent (i.e. number of bytes)
-			MPI_Aint extent;
-			MPI_Type_extent(data_type, &extent);
-
-			std::cout << "Entry " << entry << ": extent " << extent << "\n";
-			//std::cout << "Entry: " << std::string( it->second.get_MPI_Datatype()->name ) << "\n";
-
-			MPI_Aint extent_int, extent_float, extent_double, extent_char;
-			MPI_Type_extent(MPI_INT,    &extent_int);
-			MPI_Type_extent(MPI_FLOAT,  &extent_float);
-			MPI_Type_extent(MPI_DOUBLE, &extent_double);
-			MPI_Type_extent(MPI_CHAR,   &extent_char);
-			std::cout << "  DEBUG: extent_int = " << extent_int << ",  extent_float = " << extent_float << ", " 
-			          << "extent_double = " << extent_double << ", extent_char " << extent_char << "\n";
-		}
-		*/
 	}
 
 	// Finish MPI

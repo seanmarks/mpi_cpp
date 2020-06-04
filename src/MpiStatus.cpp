@@ -19,11 +19,3 @@ int MpiStatus::getCount(const MPI_Datatype& data_type) const
 #endif /* MPI_ENABLED */
 	return count;
 }
-
-
-//namespace MpiEnvironment {
-
-// Static initialization
-//MpiStatus MpiEnvironment::mpi_status_ignore;
-
-//}

@@ -8,9 +8,19 @@
 #include "MpiDatatype.h"
 #include "MpiEnvironment.h"
 
+
 #ifndef MPI_ENABLED
-class MPI_Status {};
+class MPI_Status
+{
+ public:
+	int count      = 0;
+	int cancelled  = 0;
+	int MPI_SOURCE = 0;
+	int MPI_TAG    = 0;
+	int MPI_ERROR  = 0;
+};
 #endif // MPI_ENABLED
+
 
 // Wrapper around MPI_Status
 // - Note: MPI_STATUS_IGNORE is a named constant of unspecified type, not 'MPI_Status'
@@ -18,9 +28,6 @@ class MpiStatus {
  public:
 	MpiStatus(bool ignore = false):
 		ignore_(ignore) {}
-
-	MpiStatus(const MPI_Status& status):
-		status_(status) {}
 
 	// To get an MpiStatus object that behaves as MPI_STATUS_IGNORE, use this constructor
 	static MpiStatus Ignore() {
@@ -33,18 +40,39 @@ class MpiStatus {
 	template<typename T>
 	int getCount() const;
 
-	const MPI_Status& get_MPI_Status() const { return status_; };
-	MPI_Status&       access_MPI_Status()    { return status_; };
-
 	// Whether this status behaves as MPI_STATUS_IGNORE
 	bool ignore() const {
 		return ignore_;
 	}
-
 	void setIgnore(const bool ignore) {
 		ignore_ = ignore;
 	}
 
+	// Get status properties
+	bool isCancelled() const {
+		FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
+		int flag = 1;
+#ifdef MPI_ENABLED
+		MPI_Test_cancelled(&status_, &flag);
+#endif // ifdef MPI_ENABLED
+		return static_cast<bool>(flag);
+	}
+	int getSource() const {
+		FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
+		return status_.MPI_SOURCE;
+	}
+	int getTag() const {
+		FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
+		return status_.MPI_TAG;
+	}
+	int getError() const {
+		FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
+		return status_.MPI_ERROR;
+	}
+
+	// Access underlying struct
+	const MPI_Status& get_MPI_Status() const { return status_; };
+	MPI_Status&       access_MPI_Status()    { return status_; };
 
  private:
 	// Underlying MPI Status
@@ -63,7 +91,7 @@ class MpiStatus {
 template<typename T>
 int MpiStatus::getCount() const 
 {
-	// TODO: update to MpiDatatype
+	// FIXME: What about other registered Datatypes?
 	return getCount( MpiDatatype::map_primitive_MPI_Datatype<T>() );
 }
 
