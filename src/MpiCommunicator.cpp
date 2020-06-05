@@ -7,19 +7,6 @@
 // Useful typedefs
 //using MpiStatus = MpiCommunicator::MpiStatus;
 
-#ifndef MPI_ENABLED
-/*
-// Dummy MPI_Init and MPI_Finalize for when MPI isn't available
-void MPI_Init(int* argc, char** argv[]) {
-	// Suppress "unused arguments" warnings
-	(void) argc; (void) argv;
-};
-
-// Dummy MPI_Finalize
-void MPI_Finalize() {};
-*/
-#endif /* MPI_ENABLED */
-
 
 //-------------------------------------------//
 //----- Constructors and Initialization -----//
@@ -32,7 +19,7 @@ MpiCommunicator::MpiCommunicator()
 	//do_MPI_Init_if_not_initialized();
 	setCommunicator(MPI_COMM_SELF);
 	registerDefaultMpiDatatypes();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -45,7 +32,7 @@ MpiCommunicator::MpiCommunicator(const MPI_Comm& communicator)
 #else
 	// Suppress "unused arguments" warnings
 	(void) communicator;
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -101,7 +88,7 @@ MpiCommunicator::MpiCommunicator(const MpiCommunicator& communicator)
 #else
 	// Suppress "unused arguments" warnings
 	(void) communicator;
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -122,7 +109,7 @@ MpiCommunicator::~MpiCommunicator()
 #ifdef MPI_ENABLED
 	// Deallocate the duplicated communicator
 	MPI_Comm_free(&communicator_);
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 // TODO: return duplicates of WORLD and SELF?
@@ -231,7 +218,7 @@ void MpiCommunicator::setCommunicator(const MPI_Comm& communicator)
 	MPI_Init(&argc_dummy, &argv_dummy);
 	MPI_Finalize();
 	*/
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -256,7 +243,7 @@ int MpiCommunicator::getRank() const
 	else {
 		throw MpiEnvironment::MpiUninitializedException(); 
 	}
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 	return rank;
 }
 
@@ -271,7 +258,7 @@ int MpiCommunicator::getSize() const
 	else {
 		throw MpiEnvironment::MpiUninitializedException(); 
 	}
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 	return size;
 }
 
@@ -298,7 +285,7 @@ void MpiCommunicator::send(
 #else
 	(void) data; (void) destination; (void) tag;
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -324,7 +311,7 @@ void MpiCommunicator::recv(
 #else
 	(void) data; (void) source; (void) tag; (void) status;
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -343,7 +330,7 @@ void MpiCommunicator::Isend(
 #else
 	(void) data; (void) destination; (void) tag; (void) request;
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -362,7 +349,7 @@ void MpiCommunicator::Irecv(
 #else
 	(void) data; (void) source; (void) tag; (void) request;
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -383,7 +370,7 @@ void MpiCommunicator::barrier()
 	}
 #else
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -401,7 +388,7 @@ void MpiCommunicator::bcast(MpiData& data, const int root)
 #else
 	(void) data; (void) root;
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -437,7 +424,7 @@ void MpiCommunicator::allreduce(
 #else
 	(void) data_in; (void) data_out; (void) op;
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -466,7 +453,7 @@ void MpiCommunicator::allgather(
 #else
 	(void) send_data; (void) recv_data;
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -488,7 +475,7 @@ void MpiCommunicator::allgatherv(
 #else
 	(void) data; (void) recv_offsets; (void) recv_counts; (void) recv_data;
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -510,5 +497,5 @@ void MpiCommunicator::Iallgatherv(
 #else
 	(void) data; (void) recv_offsets; (void) recv_counts; (void) recv_data;
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }

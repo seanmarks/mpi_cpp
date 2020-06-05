@@ -80,7 +80,7 @@
 class MPI_Comm {};
 
 class MPI_Datatype;
-#endif /* MPI_ENABLED */
+#endif // MPI_ENABLED
 
 // Forward declarations to prevent circular dependency
 class MpiData;
@@ -543,7 +543,7 @@ std::array<int,dim> MpiCommunicator::calculateGridDimensions() const
 	for ( int d=0; d<dim_int; ++d ) {
 		grid_dimensions[d] = 1;
 	}
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 
 	return grid_dimensions;
 }
@@ -955,4 +955,4 @@ void MpiCommunicator::Iallgatherv(
 	                  mpi_data_recv, request);
 }
 
-#endif /* MPI_COMMUNICATOR_H */
+#endif // ifndef MPI_COMMUNICATOR_H
