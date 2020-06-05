@@ -17,5 +17,30 @@ void MpiRequest::wait(MpiStatus& status)
 #else
 	(void) status;
 	throw MpiEnvironment::MpiDisabledException();
-#endif /* MPI_ENABLED */
+#endif // MPI_ENABLED
+}
+
+bool MpiRequest::test(MpiStatus& status)
+{
+	bool is_completed = false;
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		int flag = 0;
+		if ( status.ignore() ) {
+			MPI_Test(&request_, &flag, MPI_STATUS_IGNORE);
+		}
+		else {
+			MPI_Test(&request_, &flag, &status.access_MPI_Status());
+		}
+		is_completed = static_cast<bool>(flag);
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException(); 
+	}
+#else
+	(void) status;
+	throw MpiEnvironment::MpiDisabledException();
+#endif // MPI_ENABLED
+
+	return is_completed;
 }

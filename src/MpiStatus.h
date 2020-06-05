@@ -30,6 +30,8 @@ class MpiStatus {
 		ignore_(ignore) {}
 
 	// To get an MpiStatus object that behaves as MPI_STATUS_IGNORE, use this constructor
+	// - An alternative would have been to use a static const MpiStatus to represent MPI_STATUS_IGNORE,
+	//   but many functions require a mutable reference as an argument.
 	static MpiStatus Ignore() {
 		bool ignore_status = true;
 		return MpiStatus(ignore_status);

@@ -185,11 +185,19 @@ class MpiCommunicator
 		return ( this->getSize() == 1 );
 	}
 
+
 	//------------------------------//
 	//----- Misc. MPI Routines -----//
 	//------------------------------//
 
 	// TODO abort
+
+	// Test for an incoming message
+	// - Blocking
+	void probe(const int source, const int tag, MpiStatus& status) const;
+	// - Non-blocking
+	bool Iprobe(const int source, const int tag, MpiStatus& status) const;
+
 
 	//-------------------------------------//
 	//----- MPI Datatype Registration -----//

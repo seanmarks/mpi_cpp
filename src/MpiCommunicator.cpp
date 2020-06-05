@@ -125,6 +125,8 @@ MpiCommunicator::~MpiCommunicator()
 #endif /* MPI_ENABLED */
 }
 
+// TODO: return duplicates of WORLD and SELF?
+
 // Returns MPI_COMM_WORLD if MPI is enabled, else returns a dummy MPI_Comm
 MPI_Comm MpiCommunicator::get_mpi_comm_world()
 {
@@ -147,6 +149,54 @@ MPI_Comm MpiCommunicator::get_mpi_comm_self()
 
 // Definition of static variable
 const MpiData MpiCommunicator::mpi_in_place;
+
+
+void MpiCommunicator::probe(const int source, const int tag, MpiStatus& status) const
+{
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		if ( status.ignore() ) {
+			MPI_Probe(source, tag, communicator_, MPI_STATUS_IGNORE);
+		}
+		else {
+			MPI_Probe(source, tag, communicator_, &status.access_MPI_Status());
+		}
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}
+#else
+	(void) status;
+	throw MpiEnvironment::MpiDisabledException();
+#endif // MPI_ENABLED
+}
+
+
+bool MpiCommunicator::Iprobe(const int source, const int tag, MpiStatus& status) const
+{
+	bool message_ready = false;
+
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		int flag = 0;
+		if ( status.ignore() ) {
+			MPI_Iprobe(source, tag, communicator_, &flag, MPI_STATUS_IGNORE);
+		}
+		else {
+			MPI_Iprobe(source, tag, communicator_, &flag, &status.access_MPI_Status());
+		}
+		message_ready = static_cast<bool>(flag);
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}
+#else
+	(void) status;
+	throw MpiEnvironment::MpiDisabledException();
+#endif // MPI_ENABLED
+
+	return message_ready;	
+}
 
 
 //-------------------------------------------------//
