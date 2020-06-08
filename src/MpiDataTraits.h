@@ -15,6 +15,10 @@
 //     - This is distinct from how the *datatype* of a single element is registered
 //       (e.g. a single std::array as an MPI_Type_contiguous)
 //
+// - DEVELOPMENT (TODO)
+//   - std::string
+//   - std::list?
+//
 // FIXME
 // - Variable-length buffers for recv/Irecv
 //   - resize / resizeToCapacity
@@ -45,6 +49,7 @@ struct MpiDataTraits
 	using reference     = T&;
 	using pointer       = T*;
 	using const_pointer = const T*;
+	using element_type  = T;
 
 	static size_type size(const T& value) { return 1; }
 
@@ -68,7 +73,10 @@ struct MpiDataTraits
 template<typename T, typename A>
 struct MpiDataTraits<std::vector<T,A>>
 {
-	static_assert(std::is_arithmetic<T>::value, "invalid type");
+	// For nested types (e.g. std::vector<std::array<V,N>>), the underlying element
+	// must have an arithmetic type
+	using element_type  = typename MpiDataTraits<T>::element_type;
+	static_assert(std::is_arithmetic<element_type>::value, "invalid type");
 
 	using Vector = std::vector<T,A>;
 	using size_type     = std::size_t;  // typename Vector::size_type;
@@ -111,6 +119,7 @@ struct MpiDataTraits<std::array<T,N>>
 	using reference     = Array&;
 	using pointer       = Array*;
 	using const_pointer = const Array*;
+	using element_type  = T;
 
 	static size_type size(const Array& array) { return 1; }
 
@@ -144,6 +153,7 @@ struct MpiDataTraits<std::array<std::array<T,NC>, NR>>
 	using reference     = Matrix&;
 	using pointer       = Matrix*;
 	using const_pointer = const Matrix*;
+	using element_type  = T;
 
 	static size_type size(const Matrix& matrix) { return 1; }
 
@@ -176,6 +186,7 @@ struct MpiDataTraits<std::complex<T>>
 	using reference     = Complex&;
 	using pointer       = Complex*;
 	using const_pointer = const Complex*;
+	using element_type  = T;
 
 	static size_type size(const Complex& value) { return 1; }
 

@@ -32,7 +32,8 @@ class MpiDatatypeRegistry
 	//------ Registration -----//
 	//-------------------------//
 
-	// Register type T as MpiDatatype T
+	// Register type 'T' as an MpiDatatype
+	// - Throws an exception if 'T' is already registered
 	template<typename T>
 	void registerType(const MpiDatatype& data_type);
 
@@ -42,8 +43,13 @@ class MpiDatatypeRegistry
 	// - This is useful for constructing derived types for template specializations
 	//   - e.g. the same MpiDatatypeRegistrar can register different std::arrays 
 	// - Returns a refernce to the new type
+	// - Throws an exception if 'T' is already registered
 	template<typename T>
 	const MpiDatatype& registerType();
+
+	// Returns 'true' if type 'T' is registered
+	template<typename T>
+	bool isRegistered() const;
 
 
 	//------------------------------//
@@ -101,14 +107,7 @@ void MpiDatatypeRegistry::registerType(const MpiDatatype& data_type)
 {
 	// First, ensure the type doesn't already exist
 	std::type_index ti(typeid(T));
-	const auto it = mpi_datatype_map_.find(ti);
-	if ( it != mpi_datatype_map_.end() ) {
-		std::stringstream err_ss;
-		err_ss << "Error in " << FANCY_FUNCTION << "\n"
-					 << "  type \"" << ti.name() << "\" is already registered \n"
-					 << "  (NOTE: the type name printed above is implementation-dependent)\n";
-		throw std::runtime_error( err_ss.str() );
-	}
+	FANCY_ASSERT( ! isRegistered<T>(), "type " << ti.name() << "is already registered" );
 
 	// Register the mapping
 	mpi_datatype_map_.insert( std::make_pair(ti, MpiDatatypePtr(new MpiDatatype(data_type))) );
@@ -118,49 +117,52 @@ void MpiDatatypeRegistry::registerType(const MpiDatatype& data_type)
 template<typename T>
 const MpiDatatype& MpiDatatypeRegistry::registerType()
 {
+	std::type_index ti(typeid(T));
+
 	// First, ensure the type doesn't already exist
-	std::type_index ti(typeid(T));  // convert to type index
-	auto it = mpi_datatype_map_.find(ti);   //std::type_index(typeid(T)) );
-	if ( it == mpi_datatype_map_.end() ) {
-		// Register a new type
-		using Registrar = MpiDatatypeRegistrar<T>;
-		auto insert_result_pair = mpi_datatype_map_.insert(
-				std::make_pair(
-					ti, 
-					MpiDatatypePtr(new MpiDatatype(Registrar::makeMpiDatatype(*this)))
-				)
-		);
-		const auto& new_pair_it = insert_result_pair.first;
-		const MpiDatatype& new_datatype = *(new_pair_it->second);
+	// - TODO: operate on (and return) the existing type instead?
+	FANCY_ASSERT( ! isRegistered<T>(), "type " << ti.name() << "is already registered" );
 
-		// Add a new sub-map for this type's standard operations
-		auto insert_it = standard_mpi_op_map_.insert( std::make_pair(ti, MpiOp::StandardOpsMap()) );
-		bool success = insert_it.second;
-		if ( success ) {
-			auto& new_pair_it = insert_it.first;  // the new pair in the outer unordered_map
-			auto& new_map = new_pair_it->second;  // the new submap itself
+	// Register a new type
+	// - TODO: use other registration function?
+	using Registrar = MpiDatatypeRegistrar<T>;
+	auto insert_result_pair = mpi_datatype_map_.insert(
+			std::make_pair(
+				ti, 
+				MpiDatatypePtr(new MpiDatatype(Registrar::makeMpiDatatype(*this)))
+			)
+	);
+	const auto& new_pair_it = insert_result_pair.first;
+	const MpiDatatype& new_datatype = *(new_pair_it->second);
 
-			// Use the registrar to register relevant operations
-			Registrar::registerMpiOps( new_map );
-		}
-		else {
-			std::stringstream err_ss;
-			err_ss << "Error in " << FANCY_FUNCTION << "\n"
-						 << "  standard op map for type \"" << ti.name() << "\" already exists.\n"
-						 << "  (NOTE: the type name printed above is implementation-dependent)\n";
-			throw std::runtime_error( err_ss.str() );
-		}
+	// Add a new sub-map for this type's standard operations
+	auto insert_it = standard_mpi_op_map_.insert( std::make_pair(ti, MpiOp::StandardOpsMap()) );
+	bool success = insert_it.second;
+	if ( success ) {
+		auto& new_pair_it = insert_it.first;  // the new pair in the outer unordered_map
+		auto& new_map = new_pair_it->second;  // the new submap itself
 
-		return new_datatype;
+		// Use the registrar to register relevant operations
+		Registrar::registerMpiOps( new_map );
 	}
 	else {
-		// TODO: return the existing type instead?
 		std::stringstream err_ss;
 		err_ss << "Error in " << FANCY_FUNCTION << "\n"
-					 << "  type \"" << ti.name() << "\" is already registered \n"
+					 << "  standard op map for type \"" << ti.name() << "\" already exists.\n"
 					 << "  (NOTE: the type name printed above is implementation-dependent)\n";
 		throw std::runtime_error( err_ss.str() );
 	}
+
+	return new_datatype;
+}
+
+
+template<typename T>
+bool MpiDatatypeRegistry::isRegistered() const
+{
+	std::type_index ti(typeid(T));  // convert to type index
+	auto it = mpi_datatype_map_.find(ti);
+	return ( it != mpi_datatype_map_.end() );
 }
 
 
@@ -188,7 +190,10 @@ template<typename T>
 inline
 const MpiOp& MpiDatatypeRegistry::mapStandardMpiOp(const MpiOp::StandardOp& op_enum)
 {
-	// First, get the StandardOp->MpiOp map for the given type
+	// First, ensure the type is registered.
+	mapMpiDatatype<T>();
+
+	// Get the StandardOp->MpiOp map for the given type
 	std::type_index t_index = std::type_index(typeid(T));
 	const auto pair_it = standard_mpi_op_map_.find(t_index);
 	if ( pair_it == standard_mpi_op_map_.end() ) {

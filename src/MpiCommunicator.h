@@ -156,6 +156,14 @@ class MpiCommunicator
 		return ( this->getSize() == 1 );
 	}
 
+	// Shortcuts to environment status functions
+	static bool is_mpi_initialized() {
+		return MpiEnvironment::is_initialized();
+	}
+	static bool is_mpi_enabled() {
+		return MpiEnvironment::is_enabled();
+	}
+
 
 	//------------------------------//
 	//----- Misc. MPI Routines -----//
