@@ -1,4 +1,10 @@
 // MpiRequest - wraps MPI_Request
+// - Written by Sean M. Marks (https://github.com/seanmarks)
+//
+// DEVELOPMENT (TODO)
+// - Convert to template based on the associated message?
+//   - Would more closely link the request with the data it represents
+//     and prevent some misuses of requests intended for use with different types
 
 #pragma once
 #ifndef MPI_REQUEST_H

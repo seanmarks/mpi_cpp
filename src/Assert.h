@@ -1,4 +1,5 @@
 // Assert: quick exception throwing with assert-like syntax and informative messages
+// - Written by Sean M. Marks (https://github.com/seanmarks)
 
 #ifndef ASSERT_H
 #define ASSERT_H
@@ -37,7 +38,7 @@
 		       << "  where:     " << LOCATION_IN_SOURCE_STRING << "\n"  \
 		       << "  message:   " << message << "\n"                    \
 		       << "  test:      " << STRINGIFY(test) << std::endl;      \
-  	throw std::runtime_error( err_ss.str() );                       \
+		throw std::runtime_error( err_ss.str() );                       \
 	}
 
 // Fancy asserts that are only run in debug mode

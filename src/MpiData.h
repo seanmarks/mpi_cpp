@@ -1,4 +1,5 @@
 // MpiData - wraps an MPI buffer and its MPI_Datatype
+// - Written by Sean M. Marks (https://github.com/seanmarks)
 
 #pragma once
 #ifndef MPI_DATA_H

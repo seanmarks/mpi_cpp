@@ -1,4 +1,7 @@
+// Written by Sean M. Marks (https://github.com/seanmarks)
+
 #include "MpiOp.h"
+
 
 MpiOp::MpiOp(): 
 	user_function_ptr_(nullptr),

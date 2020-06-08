@@ -1,3 +1,5 @@
+// Written by Sean M. Marks (https://github.com/seanmarks)
+
 #include "MpiCommunicator.h"
 
 //-------------------------------------------//

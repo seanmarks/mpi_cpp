@@ -1,25 +1,27 @@
 // MpiCommunicator
+// - Written by Sean M. Marks (https://github.com/seanmarks)
 //
 // ABOUT: Wrapper around MPI communicator and other library functions
-//	- Based heavily on the Communicator implemented in PLUMED 2.4.0 (see http://plumed.org)
+//	- Heavily influenced by the Communicator implemented in PLUMED 2.4.0 (see http://plumed.org)
 //  - Contains lots of template code for commonly-used STL containers that store
-//    primitive types (e.g. int, double) in contiguous memory
+//    primitive types (e.g. int, double) in contiguous memory.
 //  - Shields the user from many of the tedious aspects of MPI library calls
 //
 // FOR THE USER:
 //  - Make sure std::vector buffers are prepared using resize(), not just reserve()
 //
 // NOTES:
-//	- Most functions (e.g. get/set, send/recv) throw if MPI is not initialized
+//	- Most functions throw if MPI is not initialized
+//    - Notable exceptions: functions that return size/rank
 //
 //  - Unless stated otherwise, MPI wrappers that involve some rank receiving data
-//    (e.g. recv, Irecv, bcast,scatter, allgather, ...)
-//    *assume* that the receive buffers are appropriately sized
+//    (e.g. recv, Irecv, bcast,scatter, allgather, ...) *assume* that the receive
+//    buffers are appropriately sized before calling the function.
 //    - ex. to receive 100 elements in a std::vector, the vector must be passed
 //          a size (not capacity) of 100
 //
 //    - There are some exceptions
-//       - allgathervWithUnknownSizes()
+//       Ex. allgathervWithUnknownCounts()
 //          - calls allgather() to determine how much data each rank will send,
 //            and resizes all output arrays accordingly
 //
@@ -136,10 +138,14 @@ class MpiCommunicator
 	// Returns the rank of this process in the commmunicator
 	// - Returns 0 if MPI is not enabled
 	int getRank() const;
+	int rank() const { return getRank(); }
 
 	// Returns the master rank for this communicator
 	int getMasterRank() const {
 		return master_rank_;
+	}
+	int masterRank() const {
+		return getMasterRank();
 	}
 
 	// Returns 'true' if this rank is the master rank
@@ -270,7 +276,7 @@ class MpiCommunicator
 		const int root
 	);
 
-	// TODO bcastWithUnknownSize
+	// TODO bcastWithUnknownCount
 
 
 	//----- Scatter -----//
@@ -603,7 +609,7 @@ void MpiCommunicator::bcast(T& data, const int root)
 }
 
 
-// TODO bcastWithUnknownSize
+// TODO bcastWithUnknownCount
 
 
 //----- Scatter -----//

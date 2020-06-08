@@ -1,6 +1,12 @@
 // MpiStatus - wrapper around MPI_Status
+// - Written by Sean M. Marks (https://github.com/seanmarks)
 //
-// - Note: MPI_STATUS_IGNORE is a named constant
+// NOTES
+// - Note: MPI_STATUS_IGNORE is a named constant, not an MPI_Status
+//
+// DEVELOPMENT (TODO)
+// - Convert to template based on the associated message?
+//   - Will have to be done if MpiRequest is converted to a template class
 
 #pragma once
 #ifndef MPI_STATUS_H

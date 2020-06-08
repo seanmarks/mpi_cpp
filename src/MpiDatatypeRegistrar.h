@@ -1,4 +1,7 @@
 // MpiDatatypeRegistrar: helper class for registering MpiDatatypes
+// - Written by Sean M. Marks (https://github.com/seanmarks)
+//
+// NOTES
 // - Currently, only arithmetic types are supported (std::is_arithmetic)
 
 #pragma once

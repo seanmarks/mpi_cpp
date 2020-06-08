@@ -1,4 +1,6 @@
 // MpiEnvironment: Check the whether MPI is enabled, and initialize/finalize it
+// - Written by Sean M. Marks (https://github.com/seanmarks)
+//
 // TODO:
 // - Move to static MpiEnvironment class?
 // - Add overloads for init() that take arguments?

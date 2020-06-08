@@ -1,4 +1,7 @@
 // MpiDatatypeRegistry: map from C++ type to MpiDatatype
+// - Written by Sean M. Marks (https://github.com/seanmarks)
+//
+// NOTES
 // - Also controls the registration of MPI_Ops associated
 //   with the registered datatypes
 //

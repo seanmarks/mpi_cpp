@@ -1,4 +1,5 @@
 // MpiDataTraits - helper class for constructing MpiData buffers from different types
+// - Written by Sean M. Marks (https://github.com/seanmarks)
 //
 // - NOTES
 //   - It might seem funny at first to have a class whose only job is to call

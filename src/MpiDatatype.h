@@ -1,4 +1,5 @@
 // MpiDatatype: Wrapper around MPI_Datatype
+// - Written by Sean M. Marks (https://github.com/seanmarks)
 
 #pragma once
 #ifndef MPI_DATATYPE_H

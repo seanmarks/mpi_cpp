@@ -1,5 +1,8 @@
 // MpiOp - Wrapper around MPI_Op
-// - Handles allocation and deallocation
+// - Written by Sean M. Marks (https://github.com/seanmarks)
+//
+// NOTES
+// - Handles allocation and deallocation (MPI_Type_commit/free)
 //
 // - FIXME: moving/copying
 

@@ -1,3 +1,4 @@
+// Written by Sean M. Marks (https://github.com/seanmarks)
 
 #include <iostream>
 #include <typeindex>
