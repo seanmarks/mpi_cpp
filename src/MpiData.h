@@ -10,9 +10,9 @@
 #include <complex>
 #include <vector>
 
+#include "Assert.h"
 #include "MpiDataTraits.h"
 #include "MpiDatatype.h"
-#include "utils.h"
 
 // Helper class
 class MpiDatatypeRegistry;

@@ -279,30 +279,41 @@ int main(int argc, char* argv[])
 		comm.barrier();
 
 		// Master rank sends 'r' pieces of data to each rank 'r'
-		vec.resize(0);
-		std::vector<int> send_counts(num_ranks), send_offsets(num_ranks);
-		for ( int r=0; r<num_ranks; ++r ) {
-			if ( r == 0 ) {
-				send_offsets[r] = 0;
-			}
-			else {
-				send_offsets[r] = send_offsets[r-1] + send_counts[r-1];
-			}
-			send_counts[r] = r;
+		int scatterv_root = master_rank;
+		vec.clear();
+		std::vector<int> send_counts, send_offsets;
+		if ( is_master ) {
+			send_counts.resize(num_ranks);
+			send_offsets.resize(num_ranks);
+			for ( int r=0; r<num_ranks; ++r ) {
+				if ( r == 0 ) {
+					send_offsets[r] = 0;
+				}
+				else {
+					send_offsets[r] = send_offsets[r-1] + send_counts[r-1];
+				}
+				send_counts[r] = r;
 
-			for ( int i=0; i<r; ++i ) {
-				vec.push_back(i);
+				for ( int i=0; i<r; ++i ) {
+					vec.push_back(i);
+				}
 			}
 		}
 
 		// Send data
-		int scatterv_root = master_rank;
-		if ( ! is_master ) {
-			vec.clear();  // non-master ranks don't get to keep their data
-		}
+		buffer.resize(my_rank);
 		comm.scatterv(vec, send_counts, send_offsets, buffer, scatterv_root);
 
 		// Check results
+		FANCY_ASSERT( buffer.size() == static_cast<unsigned>(my_rank), "bad size" );
+		for ( int i=0; i<my_rank; ++i ) {
+			FANCY_ASSERT( buffer[i] == i,
+			              prefix << "buffer[" << i << "] = " << buffer[i] << "," << " expected " << i );
+		}
+
+		// Repeat with automatically-determined recv count
+		buffer.clear();
+		comm.scattervWithUnknownCounts(vec, send_counts, send_offsets, buffer, scatterv_root);
 		FANCY_ASSERT( buffer.size() == static_cast<unsigned>(my_rank), "bad size" );
 		for ( int i=0; i<my_rank; ++i ) {
 			FANCY_ASSERT( buffer[i] == i,

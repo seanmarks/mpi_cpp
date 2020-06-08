@@ -12,9 +12,9 @@
 #include <type_traits>
 #include <unordered_map>
 
+#include "Assert.h"
 #include "MpiDatatype.h"
 #include "MpiEnvironment.h"
-#include "utils.h"
 
 
 #ifndef MPI_ENABLED

@@ -191,7 +191,7 @@ struct MpiDataTraits<std::complex<T>>
 	using Complex = std::complex<T>;
 	using size_type    = std::size_t;
 	using value_type   = Complex;
-	using element_type = T;
+	using element_type = Complex;
 
 	using reference       = Complex&;
 	using const_reference = const Complex&;
