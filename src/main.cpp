@@ -30,9 +30,10 @@ int main(int argc, char* argv[])
 	//
 	{
 		MpiCommunicator comm = MpiCommunicator::World();
-		const int my_rank   = comm.getRank();
-		const int num_ranks = comm.getSize();
-		const bool is_master = comm.isMasterRank();
+		const int my_rank     = comm.getRank();
+		const int num_ranks   = comm.getSize();
+		const int master_rank = comm.getMasterRank();
+		const bool is_master  = comm.isMasterRank();
 
 		FANCY_ASSERT( num_ranks >= 2, "these tests cannot be done without at least " << num_ranks << " ranks" );
 
@@ -141,6 +142,7 @@ int main(int argc, char* argv[])
 		}
 		comm.barrier();
 
+		// Rank 1 sends a unique array to all other ranks
 		int bcast_root = 1;
 
 		double value          = 13.0*my_rank;
@@ -263,12 +265,49 @@ int main(int argc, char* argv[])
 			FANCY_ASSERT( count == r, "bad size" );
 			for ( int i=0; i<count; ++i ) {
 				FANCY_ASSERT( buffer[offset+i] == r + i,
-				              prefix << "buffer(" << r << "," << i << ") = " << buffer[offset+1] << ","
+				              prefix << "buffer(" << r << "," << i << ") = " << buffer[offset+i] << ","
 				              << " expected " << r+i );
 			}
 		}
 
 
+		//----- Test scatterv -----//
+
+		if ( is_master ) {
+			std::cout << "Test scatterv" << std::endl;
+		}
+		comm.barrier();
+
+		// Master rank sends 'r' pieces of data to each rank 'r'
+		vec.resize(0);
+		std::vector<int> send_counts(num_ranks), send_offsets(num_ranks);
+		for ( int r=0; r<num_ranks; ++r ) {
+			if ( r == 0 ) {
+				send_offsets[r] = 0;
+			}
+			else {
+				send_offsets[r] = send_offsets[r-1] + send_counts[r-1];
+			}
+			send_counts[r] = r;
+
+			for ( int i=0; i<r; ++i ) {
+				vec.push_back(i);
+			}
+		}
+
+		// Send data
+		int scatterv_root = master_rank;
+		if ( ! is_master ) {
+			vec.clear();  // non-master ranks don't get to keep their data
+		}
+		comm.scatterv(vec, send_counts, send_offsets, buffer, scatterv_root);
+
+		// Check results
+		FANCY_ASSERT( buffer.size() == static_cast<unsigned>(my_rank), "bad size" );
+		for ( int i=0; i<my_rank; ++i ) {
+			FANCY_ASSERT( buffer[i] == i,
+			              prefix << "buffer[" << i << "] = " << buffer[i] << "," << " expected " << i );
+		}
 
 
 		/*
