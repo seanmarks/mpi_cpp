@@ -5,50 +5,45 @@
 //  - Contains lots of template code for commonly-used STL containers that store
 //    primitive types (e.g. int, double) in contiguous memory
 //  - Shields the user from many of the tedious aspects of MPI library calls
-// 
+//
 // FOR THE USER:
 //  - Make sure std::vector buffers are prepared using resize(), not just reserve()
 //
 // NOTES:
 //	- Most functions (e.g. get/set, send/recv) throw if MPI is not initialized
-//  - MPI routines here almost always *assume* that the receive buffers have enough
-//		memory reserved to handle the maximum amount of data that may be sent at a time.
-//    They do not pre-reserve space for you, but will auto-resize based on the 
-//    amount of data received.
-//    - They are not designed to receive data over multiple calls
-//    - Exceptions:
-//       - allgatherv(): calls gather() to determine how much data each rank will send,
-//                       and resizes all output arrays accordingly
 //
-//  - send/Isend functions:
-//    - Infer the number of data elements to send based on MpiData::size
-//      - For a std::vector, this is taken to be its size (not capacity)
+//  - Unless stated otherwise, MPI wrappers that involve some rank receiving data
+//    (e.g. recv, Irecv, bcast,scatter, allgather, ...)
+//    *assume* that the receive buffers are appropriately sized
+//    - ex. to receive 100 elements in a std::vector, the vector must be passed
+//          a size (not capacity) of 100
 //
-//  - recv functions:
-//    - Set MpiData::size based on how much data was received 
-//      (except if MPI_STATUS_IGNORE is requested)
-//       - If MPI_STATUS_IGNORE is requested, the functions assume that
-//         all available space was filled
-//          - e.g. vectors are filled to capacity, irrespective of starting size
-//       - If you want a vector to receive an amount of data other
-//         than its current size, you *MUST* pass it an MpiStatus object, even if
-//         you do nothing with it after the call
-//
-//  - Irecv functions: (TODO)
-//    - 
+//    - There are some exceptions
+//       - allgathervWithUnknownSizes()
+//          - calls allgather() to determine how much data each rank will send,
+//            and resizes all output arrays accordingly
 //
 //  - The return codes of MPI calls are not checked because the default behavior of
 //    MPI is to internally check for errors before returning, and abort on error
 //    - There is no guarantee that MPI can continue past an error anyway
-// 
-// DEVELOPMENT: TODO
-//  - Isend routines
-//  - Include PLMD::Vector overloads?
+//
+// DEVELOPMENT (TODO)
 //  - Pointer overloads
+//
 //  - Generalize template code for std::vectors of contiguous data arrays?
 //    - Such a setup would cover std::vector<T>, PLMD::Vector, std::array<T,dim>, ...
 //    - Could make use of MPI's own custom type system with MPI_Type_contiguous
 //      - Reference:  https://tech.io/playgrounds/349/introduction-to-mpi/custom-types
+//
+//  - Non-blocking receives with final length unknown a priori
+//
+//  - Make MpiCommunicator data-sharing methods all const?
+//    - They don't really change the communicator state (right?)
+// - Add more notes about proper usage, esp. resizing buffers
+//
+// FIXME:
+// - Copying an MpiCommunicator
+//   - Copying the registry/registries
 
 #pragma once
 #ifndef MPI_COMMUNICATOR_H
@@ -69,72 +64,50 @@
 #include <vector>
 
 #include "Assert.h"
+#include "MpiData.h"
+#include "MpiDatatype.h"
+#include "MpiDatatypeRegistry.h"
 #include "MpiEnvironment.h"
 #include "MpiOp.h"
 #include "MpiRequest.h"
 #include "MpiStatus.h"
 
 
+// TODO: prevent multiple definitions when compiled with other
+// libraries that define a dummy MPI_Comm
 #ifndef MPI_ENABLED
-// Dummy classes for when MPI is not available
 class MPI_Comm {};
-
-class MPI_Datatype;
 #endif // MPI_ENABLED
 
-// Forward declarations to prevent circular dependency
-class MpiData;
-class MpiDatatype;
-template<typename T> class MpiDatatypeRegistrar;
 
 class MpiCommunicator
 {
  public:
 	using StandardOp = MpiOp::StandardOp;
 
-	template<typename T>
-	friend class MpiDatatypeRegistrar;
-
 	//-------------------------------------------//
 	//----- Constructors and Initialization -----//
 	//-------------------------------------------//
 
-	// Default constructor
-	// - Sets the communicator to MPI_COMM_SELF
-	// - Will do MPI_Init if necessary
+	// Default constructor: initialize as a duplicate of MPI_COMM_SELF
 	MpiCommunicator();
 
-	// Initialize from raw MPI communicator
-	// - This is the "primary" constructor
-	// - Duplicates the provided communicator, creating a new context
-	// - Will do MPI_Init if necessary
-	MpiCommunicator(const MPI_Comm& communicator);
+	// Initialize as a duplicate of the raw input communicator
+	explicit MpiCommunicator(const MPI_Comm& communicator);
 
-	// Copy constructor 
+	// Copy constructor
+	// FIXME:
+	// - duplicating member variables appropriately
 	MpiCommunicator(const MpiCommunicator& communicator);
+
+	// Initialize as a duplicate of MPI_COMM_WORLD
+	static MpiCommunicator World();
+
+	// Initialize as a duplicate of MPI_COMM_SELF
+	static MpiCommunicator Self();
 
 	// Destructor
 	~MpiCommunicator();
-
-	// TODO: Move static function calls to MpiEnvironment namespace?
-
-	// Checks whether MPI is available (whether the code was compiled with MPI)
-	static bool is_mpi_enabled();
-
-	// Checks whether the MPI library has been initialized
-	// - Returns "false" if MPI is not enabled
-	// - Note: MPI mandates that MPI_Init may only be called *once* by each process
-	static bool is_mpi_initialized();
-
-	// Returns MPI_COMM_WORLD if MPI is enabled, else returns a dummy MPI_Comm
-	// - Use this in order to avoid any direct references to MPI_COMM_WORLD in your code,
-	//   so that in can compile if MPI is not enabled
-	static MPI_Comm get_mpi_comm_world();
-
-	// Returns MPI_COMM_SELF if MPI is enabled, else returns a dummy MPI_Comm
-	// - Use this in order to avoid any direct references to MPI_COMM_WORLD in your code,
-	//   so that in can compile if MPI is not enabled
-	static MPI_Comm get_mpi_comm_self();
 
 	// Assuming a dim-dimensional system in Cartesian space, this function
 	// uses MPI_Dims_create() to determine the number of domain decomposition
@@ -143,9 +116,9 @@ class MpiCommunicator
 	std::array<int,dim> calculateGridDimensions() const;
 
 
-	//-----------------------------//
-	//----- Get/Set Functions -----//
-	//-----------------------------//
+	//---------------------------------//
+	//----- Communicator Settings -----//
+	//---------------------------------//
 
 	// Duplicates the communicator provided
 	void setCommunicator(const MPI_Comm& communicator);
@@ -162,7 +135,10 @@ class MpiCommunicator
 	// - Returns 0 if MPI is not enabled
 	int getRank() const;
 
-	int getMasterRank() const { return master_rank_; }
+	// Returns the master rank for this communicator
+	int getMasterRank() const {
+		return master_rank_;
+	}
 
 	// Returns 'true' if this rank is the master rank
 	bool isMasterRank() {
@@ -173,13 +149,8 @@ class MpiCommunicator
 	// - Returns 1 if MPI is not enabled, since a serial code is equivalent (in a sense)
 	//   to an MPI run with one rank
 	int getSize() const;
+	int size() const        { return this->getSize(); }
 	int getNumRanks() const { return this->getSize(); }
-
-	// Static mapping from primitive C++ types to MPI types
-	/*
-	template<typename T>
-	static MPI_Datatype get_primitive_MPI_Datatype();
-	*/
 
 	bool isSerial() const {
 		return ( this->getSize() == 1 );
@@ -203,114 +174,68 @@ class MpiCommunicator
 	//----- MPI Datatype Registration -----//
 	//-------------------------------------//
 
-	// Register type T as MpiDatatype T
-	template<typename T>
-	void registerType(const MpiDatatype& data_type);
+	// TODO: Public interface for the registration of new types
 
-	// Register a new type using its MpiDatatypeRegistrar
-	// - The registrar may make use of existing MpiDatatypes (such as primitives like
-	//   int and double) to create the new MpiDatatype
-	// - This is useful for constructing derived types for template specializations
-	//   - e.g. the same MpiDatatypeRegistrar can register different std::arrays 
-	// - Returns a refernce to the new type
-	template<typename T>
-	const MpiDatatype& registerType();
 
 
 	//------------------------------------------------//
 	//----- Point-to-Point Communication Methods -----//
 	//------------------------------------------------//
 
-	//----- Send -----//
 
-	// Single value (by reference)
+	//----- send -----//
+
+	// Blocking send
 	template<typename T>
-	void send(const T& data, const int destination, const int tag);
-
-	// std::vector
-	template<typename T, typename A>
-	void send(const std::vector<T,A>& vec, const int destination, const int tag);
-
-	// Wrapper around underlying MPI_Send
 	void send(
-		const MpiData& data,    // unified format for data buffer
+		const T&  data,
 		const int destination,  // rank of receiving process
 		const int tag           // message identifier (should be unique)
 	);
 
 
-	//----- Recv -----//
+	//----- recv -----//
 
-	// Single element of a registered type
+	// TODO: variable message length
+
+	// Blocking receive
 	template<typename T>
-	void recv(T& data, const int source, const int tag, 
-	          MpiStatus& status);
-
-	// std::vector of a registered type
-	// FIXME: known/unknown size
-	template<typename T, typename A>
-	void recv(std::vector<T,A>& vec, const int source, const int tag, 
-	          MpiStatus& status);
-
-	// Wrapper around underlying MPI_Recv
-	// FIXME: known/unknown size
 	void recv(
-		MpiData& data,     // unified format for data buffer
-		const int source,  // rank of source
-		const int tag,     // message identifier (should be unique)
+		T&         data,
+		const int  source,
+		const int  tag,
 		MpiStatus& status
 	);
 
 
 	//----- Isend -----//
 
-	// Single element of a registered type
+	// Non-blocking send
 	template<typename T>
-	void Isend(const T& data, const int destination, const int tag, MpiRequest& request);
-
-	// std::vector of a registered type
-	// - Note: the *size* of the vector is used in the call to MPI_Isend, *not* its capacity
-	template<typename T, typename A>
-	void Isend(const std::vector<T,A>& data, const int destination, const int tag, MpiRequest& request);
-	
-	// Wrapper around underlying MPI_Isend
 	void Isend(
-		const MpiData& data, 
-		const int destination,  // rank of receiving process
-		const int tag,          // message identifier (should be unique)
+		const T&    data,
+		const int   destination,
+		const int   tag,
 		MpiRequest& request
 	);
 
 
 	//----- Irecv -----//
 
-	// Single element of a registered type
+	// TODO: variable message length
+
+	// Non-blocking receive
 	template<typename T>
-	void Irecv(T& data, const int source, const int tag, MpiRequest& request);
-
-	// std::vector of a registered type
-	// - Note: the *size* of the vector is used in the call to MPI_Irecv, *not* its capacity
-	//   - If you want to receive a variable amount of data, you should extent the 
-	//     vector's size to its maximum capacity before calling this routine
-	// FIXME: known/unknown size
-	template<typename T,typename A>
-	void Irecv(std::vector<T,A>& data, const int source, const int tag, MpiRequest& request);
-
-	// Wrapper around underlying MPI_Irecv
 	void Irecv(
-		MpiData& data,
-		const int source, // rank of source
-		const int tag,
-		MpiRequest& request
-	);
+		T&          data,
+		const int   source,
+		const int   tag,
+		MpiRequest& request);
 
 
 	//--------------------------------------------//
 	//----- Collective Communication Methods -----//
 	//--------------------------------------------//
-
-	// Pass as MpiData to perform MPI_IN_PLACE
-	static const MpiData mpi_in_place;
 
 	// Wrapper for MPI_Barrier()
 	void barrier();
@@ -318,92 +243,51 @@ class MpiCommunicator
 
 	//----- Bcast -----//
 
-	// Wrapper for MPI_Bcast
-	// - "data" is copied from rank "root" to all ranks (including root!)
+	// Broadcast 'data' from rank 'root' to all ranks
+	// - Note that 'root' retains a copy of the data
+	template<typename T>
 	void bcast(
-		MpiData&  data, 
+		T&        data,
 		const int root
 	);
-
-	// reference to a block of contiguous memory of a primitive type 
-	template<typename T>
-	void bcast(T& data, const int root);
 
 
 	//----- Allreduce -----//
 
-	// Wrapper around underlying MPI_Allreduce
-	// - This is called by the following allreduce() functions, which handle the
-	//   conversion from raw data to MpiData
-	// TODO remove?
-	void allreduce(
-		const MpiData& data_in,   // pass 'mpi_in_place' for MPI_IN_PLACE
-		MpiData&       data_out,
-		const MpiOp&   op
-	);
-
-	// Single element of a registered type
 	template<typename T>
 	void allreduce(const T& data_in, T& data_out, const MpiOp& op);
 
-	// std::vector of a registered type
-	template<typename T, typename A>
-	void allreduce(const std::vector<T,A>& data_in, std::vector<T,A>& data_out, const MpiOp& op);
-
-	// Helper templates that simplify the interface
-	// - Same as above functions, but the operation is performed in place
+	// In place
 	template<typename T>
 	void allreduceInPlace(T& data, const MpiOp& op);
-	template<typename T, typename A>
-	void allreduceInPlace(std::vector<T,A>& data, const MpiOp& op);
 
-	// Same as above, but for a standard operation
+	// For a standard operation
 	template<typename T>
-	void allreduce(const T& data_in, T& data_out, const MpiOp::StandardOp& op_enum) {
-		allreduce(data_in, data_out, mapStandardMpiOp<T>(op_enum));
-	}
-	template<typename T, typename A>
-	void allreduce(const std::vector<T,A>& data_in, std::vector<T,A>& data_out, 
-	               const MpiOp::StandardOp& op_enum
-	) {
-		allreduce(data_in, data_out, mapStandardMpiOp<T>(op_enum));
-	}
+	void allreduce(const T& data_in, T& data_out, const MpiOp::StandardOp& op_enum);
 	template<typename T>
 	void allreduceInPlace(T& data, const MpiOp::StandardOp& op_enum);
-	template<typename T, typename A>
-	void allreduceInPlace(std::vector<T,A>& data, const MpiOp::StandardOp& op_enum);
 
-	// Extra templates, for the ultimate in laziness
+	// Shortcuts for commonly-used reductions
 	template<typename T>
 	void allreduceSumInPlace(T& data);
-	template<typename T, typename A>
-	void allreduceSumInPlace(std::vector<T,A>& data);
 
 
 	//----- Allgather -----//
 
-	// Wrapper around underlying MPI_Allgather
-	// - Amount of data to send/receive from each rank is inferred from the size
-	//   of send_data/recv_data
+
+	template<typename T, typename Container>
 	void allgather(
-		const MpiData& send_data,
-		MpiData&       recv_data
-	);
-		
-	// Receive a single value of primitive type from each rank and put the results
-	// into a std::vector
-	template<typename T, typename A>
-	void allgather(
-		const T&          value,
-		std::vector<T,A>& received_values
+		const T&   value,
+		Container& received_values
 	);
 
 
 	//----- Allgatherv -----//
 
+	/*
 	// Wrapper around underlying MPI_Allgatherv / MPI_Iallgatherv
 	// - TODO: make protected/private?
-	// - Assumes that appropriate blocks have already been prepared, that that 
+	// - Assumes that appropriate blocks have already been prepared, that that
 	//   "recv_data" is the correct size to receive it all
 	// - Variables
 	//     recv_data: buffer for all data received
@@ -423,7 +307,7 @@ class MpiCommunicator
 		MpiRequest&             request
 	);
 
-	// std::vectors of a registered type 
+	// std::vectors of a registered type
 	// - Calls this->allgather() first to determine the number of data elements
 	//   to receive from each rank
 	template<typename T, typename A>
@@ -434,7 +318,7 @@ class MpiCommunicator
 		std::vector<int>&       recv_offsets
 	);
 
-	// std::vectors of a registered type 
+	// std::vectors of a registered type
 	template<typename T, typename A>
 	void allgatherv(
 		const std::vector<T,A>& send_data,
@@ -451,27 +335,15 @@ class MpiCommunicator
 		std::vector<int>&       recv_offsets,
 		MpiRequest&             request
 	);
+	*/
 
 
 	//----------------------//
 	//----- Exceptions -----//
 	//----------------------//
 
-	class MpiOpNotFoundException : public std::exception {
-	 public:
-		MpiOpNotFoundException() {}
-		const char* what() const noexcept override {
-			return "Given MpiOp not found";
-		};
-	};
+	// TODO
 
-	//----- Map Wrappers -----//
-
-	// Maps type T to the appropriate MpiDatatype using member variable 'mpi_datatype_map_'
-	// - If the mapping does not already exist, a new mapping is constructed if possible
-	// TODO Make private?
-	template<typename T>
-	const MpiDatatype& mapMpiDatatype();
 
  private:
 	// Underlying MPI communicator
@@ -481,41 +353,16 @@ class MpiCommunicator
 	// Rank (index) of the master process
 	const int master_rank_ = 0;
 
-	// Map from C++ std::type_index(typeid(T)) to MpiDatatypes
-	std::unordered_map<std::type_index, std::unique_ptr<MpiDatatype>> mpi_datatype_map_;
-
-	// Register a number of commonly-used types in 'mpi_datatype_map_'
-	void registerDefaultMpiDatatypes();
-
-	// Registers all predefined MPI_Datatypes in 'mpi_datatype_map_'
-	// - These must be registered first, before any other types!
-	void registerPrimitiveMpiDatatypes();
-
-	// Map from type T to its registered standard MpiOps
-	std::unordered_map<std::type_index, MpiOp::StandardOpsMap> standard_mpi_op_map_;
-
-	// Returns the MpiOp for the given type corresponding to the standard operation 
-	// represented by the StandardOp enum
-	template<typename T>
-	const MpiOp& mapStandardMpiOp(const MpiOp::StandardOp& op_enum);
+	// Registry with the types recognized by this communicator
+	MpiDatatypeRegistry datatype_registry_;
 }; // end class MpiCommunicator
 
 
-//--------------------------------//
-//--------------------------------//
-//----- TEMPLATE DEFINITIONS -----//
-//--------------------------------//
-//--------------------------------//
-
-// Templates... templates everywhere...
-
-// Now include the definitions necessary to implement the following templates
-#include "MpiData.h"
-#include "MpiDatatype.h"
-#include "MpiDatatypeRegistrar.h"
+//-----------------//
+//----- Misc. -----//
+//-----------------//
 
 
-// Wrapper for MPI_Dims_create
 template<std::size_t dim>
 std::array<int,dim> MpiCommunicator::calculateGridDimensions() const
 {
@@ -549,239 +396,100 @@ std::array<int,dim> MpiCommunicator::calculateGridDimensions() const
 }
 
 
-//-------------------------------------//
-//----- MPI_Datatype Registration -----//
-//-------------------------------------//
-
-
-// Register type T as MpiDatatype T
-template<typename T>
-void MpiCommunicator::registerType(const MpiDatatype& data_type)
-{
-	// First, ensure the type doesn't already exist
-	std::type_index ti(typeid(T));
-	const auto it = mpi_datatype_map_.find(ti);
-	if ( it != mpi_datatype_map_.end() ) {
-		std::stringstream err_ss;
-		err_ss << "Error in " << FANCY_FUNCTION << "\n"
-					 << "  type \"" << ti.name() << "\" is already registered \n"
-					 << "  (NOTE: the type name printed above is implementation-dependent)\n";
-		throw std::runtime_error( err_ss.str() );
-	}
-
-	// Register the mapping
-	mpi_datatype_map_.insert( std::make_pair(ti, std::unique_ptr<MpiDatatype>(new MpiDatatype(data_type))) );
-}
-
-
-// Registers type T as an MpiDatatype by using its MpiDatatypeRegistrar
-template<typename T>
-const MpiDatatype& MpiCommunicator::registerType()
-{
-	const MpiDatatype* new_datatype_ptr;
-
-	// First, ensure the type doesn't already exist
-	std::type_index ti(typeid(T));  // convert to type index
-	auto it = mpi_datatype_map_.find(ti);   //std::type_index(typeid(T)) );
-	if ( it == mpi_datatype_map_.end() ) {
-		// Register a new type
-		using Registrar = MpiDatatypeRegistrar<T>;
-		auto insert_result_pair = mpi_datatype_map_.insert( std::make_pair(ti, 
-				std::unique_ptr<MpiDatatype>(new MpiDatatype(Registrar::makeMpiDatatype(*this)))) );
-		const auto& new_pair_it = insert_result_pair.first;
-		const MpiDatatype& new_datatype = *(new_pair_it->second);
-		new_datatype_ptr = &new_datatype;
-
-		// Add a new sub-map for this type's standard operations
-		auto insert_it = standard_mpi_op_map_.insert( std::make_pair(ti, MpiOp::StandardOpsMap()) );
-		bool success = insert_it.second;
-		if ( success ) {
-			auto& new_pair_it = insert_it.first;  // the new pair in the outer unordered_map
-			auto& new_map = new_pair_it->second;  // the new submap itself
-
-			// Use the registrar to register relevant operations
-			Registrar::registerMpiOps( new_map );
-		}
-		else {
-			std::stringstream err_ss;
-			err_ss << "Error in " << FANCY_FUNCTION << "\n"
-						 << "  standard op map for type \"" << ti.name() << "\" already exists.\n"
-						 << "  (NOTE: the type name printed above is implementation-dependent)\n";
-			throw std::runtime_error( err_ss.str() );
-		}
-	}
-	else {
-		std::stringstream err_ss;
-		err_ss << "Error in " << FANCY_FUNCTION << "\n"
-					 << "  type \"" << ti.name() << "\" is already registered \n"
-					 << "  (NOTE: the type name printed above is implementation-dependent)\n";
-		throw std::runtime_error( err_ss.str() );
-	}
-
-	return *new_datatype_ptr;
-}
-
-
-// Maps type T to the appropriate MpiDatatype using member variable 'mpi_datatype_map_'
-// - If the mapping does not already exist, a new mapping is constructed if possible
-template<typename T>
-const MpiDatatype& MpiCommunicator::mapMpiDatatype()
-{
-	const auto it = mpi_datatype_map_.find( std::type_index(typeid(T)) );
-	if ( it != mpi_datatype_map_.end() ) {
-		return *(it->second);
-	}
-	else {
-		// Attempt to register the type
-		return registerType<T>();
-	}
-}
-
-
-template<typename T> inline
-const MpiOp& MpiCommunicator::mapStandardMpiOp(const MpiOp::StandardOp& op_enum)
-{
-	// First, get the StandardOp->MpiOp map for the given type
-	std::type_index t_index = std::type_index(typeid(T));
-	const auto pair_it = standard_mpi_op_map_.find(t_index);
-	if ( pair_it == standard_mpi_op_map_.end() ) {
-		std::stringstream err_ss;
-		err_ss << "Error in " << FANCY_FUNCTION << "\n"
-					 << "  could not find any standard MpiOps for type \"" << t_index.name() << "\n"
-					 << "  (NOTE: the type name printed above is implementation-dependent)\n";
-		throw std::runtime_error( err_ss.str() );
-	}
-	const auto& map_for_type = pair_it->second;
-
-	// Now find the particular operation
-	const auto op_it = map_for_type.find(op_enum);
-	if ( op_it == map_for_type.end() ) {
-		std::stringstream err_ss;
-		err_ss << "Error in " << FANCY_FUNCTION << "\n"
-					 << "  standard op \"" << MpiOp::getName(op_enum)
-		          << "\" is not defined for type \"" << t_index.name() << "\n"
-					 << "  (NOTE: the type name printed above is implementation-dependent)\n";
-		throw std::runtime_error( err_ss.str() );
-	}
-	return op_it->second;
-}
-
-
-
 //------------------------------------------------//
 //----- Point-to-Point Communication Methods -----//
 //------------------------------------------------//
 
 
-//----- Send -----//
-
-// Single element of registered type (by reference)
 template<typename T>
-void MpiCommunicator::send(const T& data, const int destination, const int tag)
-{
-	// MpiData constructor will not actually change the data
-	const MpiData send_data( const_cast<T&>(data), *this );
-	this->send(send_data, destination, tag);
-}
-
-
-// std::vector of a registered type
-template<typename T, typename A>
+inline
 void MpiCommunicator::send(
-		const std::vector<T,A>& vec, const int destination, const int tag)
+	const T& data, const int destination, const int tag)
 {
-	// MpiData constructor will not actually change the data
-	const MpiData send_data( const_cast<std::vector<T,A>&>(vec), *this );
-	this->send(send_data, destination, tag);
-}
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		// send expects non-const inputs
+		MpiData<T> send_data( const_cast<T&>(data), datatype_registry_ );
 
-
-//----- Recv -----//
-
-
-// Single element of registered type (by reference)
-template<typename T>
-void MpiCommunicator::recv(
-		T& data, const int source, const int tag, 
-		MpiStatus& status)
-{
-	MpiData data_to_recv(data, *this);
-	this->recv(data_to_recv, source, tag, status);
-}
-
-
-// std::vector of a registered type
-template<typename T, typename A>
-void MpiCommunicator::recv(
-		std::vector<T,A>& vec, const int source, const int tag, 
-		MpiStatus& status)
-{
-	// Check whether a variable amount of data is being received
-	// - If the MPI_Status is not being ignored, set the vector's final size based on 
-	//   how much data was actually received
-	// - Else TODO
-	// FIXME: MPI_Probe?
-	bool dynamic_size = false;
-	if ( status.ignore() ) {
-		dynamic_size = true; 
-		// For safety, extend the buffer to its maximum capacity
-		vec.resize( vec.capacity() );
+		MPI_Send( send_data.data(), send_data.size(), send_data.getDatatype(),
+		          destination, tag, communicator_ );
 	}
-
-	MpiData data_to_recv(vec, *this);
-	this->recv(data_to_recv, source, tag, status);
-
-	if ( dynamic_size ) {
-		// Set final size
-		data_to_recv.size = status.getCount<T>();
-		vec.resize( data_to_recv.size );
-	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}	
+#else
+	throw MpiEnvironment::MpiDisabledException();
+#endif // ifdef MPI_ENABLED
 }
 
 
-//----- Isend -----//
-
-// Single element of a registered type
 template<typename T>
+inline
+void MpiCommunicator::recv(T& data, const int source, const int tag, MpiStatus& status)
+{
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		MpiData<T> recv_data( const_cast<T&>(data), datatype_registry_ );
+
+		if ( status.ignore() ) {
+			MPI_Recv( recv_data.data(), recv_data.size(), recv_data.getDatatype(),
+			          source, tag, communicator_, MPI_STATUS_IGNORE );
+		}
+		else {
+			MPI_Recv( recv_data.data(), recv_data.size(), recv_data.getDatatype(),
+			          source, tag, communicator_, &status.access_MPI_Status() );
+			status.setDatatype( recv_data.getDatatype() );
+		}
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}	
+#else
+	throw MpiEnvironment::MpiDisabledException();
+#endif // ifdef MPI_ENABLED
+}
+
+
+template<typename T>
+inline
 void MpiCommunicator::Isend(
 	const T& data, const int destination, const int tag, MpiRequest& request)
 {
-	MpiData mpi_data( const_cast<T&>(data), *this );
-	this->Isend(mpi_data, destination, tag, request);
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		MpiData<T> send_data( const_cast<T&>(data), datatype_registry_ );
+
+		MPI_Isend( send_data.data(), send_data.size(), send_data.getDatatype(),
+		           destination, tag, communicator_, &request.access_MPI_Request() );
+		request.setActive( send_data.getDatatype() );
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}	
+#else
+	throw MpiEnvironment::MpiDisabledException();
+#endif // ifdef MPI_ENABLED
 }
 
 
-// std::vector of a registered type
-template<typename T, typename A>
-void MpiCommunicator::Isend(
-	const std::vector<T,A>& data, const int destination, const int tag, MpiRequest& request)
-{
-	MpiData mpi_data( const_cast<std::vector<T,A>&>(data), *this );
-	this->Isend(mpi_data, destination, tag, request);
-}
-
-
-//----- Irecv -----//
-
-// Single element of a registered type
 template<typename T>
+inline
 void MpiCommunicator::Irecv(T& data, const int source, const int tag, MpiRequest& request)
 {
-	MpiData mpi_data( data, *this );
-	this->Irecv(mpi_data, source, tag, request);
-}
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		MpiData<T> recv_data( data, datatype_registry_ );
 
-
-// std::vector of a registered type
-// - Note: the *size* of the vector is used in the call to MPI_Irecv, *not* its capacity
-//   - If you want to receive a variable amount of data, you should extent the 
-//     vector's size to its maximum capacity before calling this routine
-template<typename T, typename A>
-void MpiCommunicator::Irecv(
-	std::vector<T,A>& data, const int source, const int tag, MpiRequest& request)
-{
-	MpiData mpi_data( data, *this );
-	this->Irecv(mpi_data, source, tag, request);
+		MPI_Irecv( recv_data.data(), recv_data.size(), recv_data.getDatatype(),
+		           source, tag, communicator_, &request.access_MPI_Request() );
+		request.setActive( recv_data.getDatatype() );
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}	
+#else
+	throw MpiEnvironment::MpiDisabledException();
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -790,101 +498,148 @@ void MpiCommunicator::Irecv(
 //----- Collective Communication -----//
 //------------------------------------//
 
+
 //----- Bcast -----//
 
-// reference to a block of contiguous memory of a primitive type 
-template<typename T> inline
+template<typename T>
+inline
 void MpiCommunicator::bcast(T& data, const int root)
 {
-	MpiData mpi_data( data, *this );
-	this->bcast(mpi_data, root);
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		MpiData<T> mpi_data( data, datatype_registry_ );
+
+		MPI_Bcast( mpi_data.data(), mpi_data.size(), mpi_data.getDatatype(),
+		           root, this->communicator_ );
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}
+#else
+	throw MpiEnvironment::MpiDisabledException();
+#endif // ifdef MPI_ENABLED
 }
 
 
 //----- Allreduce -----//
 
-
-// Single object of a registered type
-template<typename T> inline
-void MpiCommunicator::allreduce(
-		const T& data_in, T& data_out, const MpiOp& op)
+template<typename T>
+inline
+void MpiCommunicator::allreduce(const T& data_in, T& data_out, const MpiOp& op)
 {
-	MpiData mpi_data_in( const_cast<T&>(data_in), *this );
-	MpiData mpi_data_out( data_out, *this );
-	this->allreduce(mpi_data_in, mpi_data_out, op);
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		MpiData<T> mpi_data_in ( const_cast<T&>(data_in), datatype_registry_ );
+		MpiData<T> mpi_data_out( data_out,                datatype_registry_ );
+
+		FANCY_ASSERT( mpi_data_in.getDatatype() == mpi_data_out.getDatatype(), "type mismatch" );
+		FANCY_ASSERT( mpi_data_in.size()        == mpi_data_out.size(),        "size mismatch" );
+
+		MPI_Allreduce( mpi_data_in.data(), mpi_data_out.data(), mpi_data_out.size(), mpi_data_out.getDatatype(),
+									 op.get_MPI_Op(), this->communicator_ );
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}
+#else
+	throw MpiEnvironment::MpiDisabledException();
+#endif // ifdef MPI_ENABLED
 }
 
 
-// std::vector of a registered type
-template<typename T, typename A> inline
-void MpiCommunicator::allreduce(
-		const std::vector<T,A>& data_in, std::vector<T,A>& data_out, const MpiOp& op)
+
+template<typename T>
+inline
+void MpiCommunicator::allreduceInPlace(T& data, const MpiOp& op)
 {
-	// Ensure that sizes match
-	data_out.resize( data_in.size() );
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		MpiData<T> mpi_data( data, datatype_registry_ );
 
-	MpiData mpi_data_in( const_cast<T&>(data_in), *this );
-	MpiData mpi_data_out( data_out, *this );
-	this->allreduce(mpi_data_in, mpi_data_out, op);
+		MPI_Allreduce( MPI_IN_PLACE, mpi_data.data(), mpi_data.size(), mpi_data.getDatatype(),
+		               op.get_MPI_Op(), this->communicator_ );
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}
+#else
+	throw MpiEnvironment::MpiDisabledException();
+#endif // ifdef MPI_ENABLED
 }
 
-// Same as above, but in place
-template<typename T> inline
-void MpiCommunicator::allreduceInPlace(T& data, const MpiOp& op) {
-	MpiData mpi_data(data, *this);
-	allreduce(mpi_in_place, mpi_data, op);
-}
-template<typename T, typename A> inline
-void MpiCommunicator::allreduceInPlace(std::vector<T,A>& data, const MpiOp& op) {
-	MpiData mpi_data(data, *this);
-	allreduce(mpi_in_place, mpi_data, op);
+
+template<typename T>
+inline
+void MpiCommunicator::allreduce(const T& data_in, T& data_out, const MpiOp::StandardOp& op_enum)
+{
+	using value_type = typename MpiDataTraits<T>::value_type;
+	allreduce(data_in, data_out, datatype_registry_.mapStandardMpiOp<value_type>(op_enum));
 }
 
-// In place, and for a standard operation
-template<typename T> inline
+
+template<typename T>
+inline
 void MpiCommunicator::allreduceInPlace(T& data, const MpiOp::StandardOp& op_enum) {
-	MpiData mpi_data(data, *this);
-	allreduce(mpi_in_place, mpi_data, mapStandardMpiOp<T>(op_enum));
+	using value_type = typename MpiDataTraits<T>::value_type;
+	allreduceInPlace( data, datatype_registry_.mapStandardMpiOp<value_type>(op_enum) );
 }
-template<typename T, typename A> inline
-void MpiCommunicator::allreduceInPlace(std::vector<T,A>& data, const MpiOp::StandardOp& op_enum) {
-	MpiData mpi_data(data, *this);
-	allreduce(mpi_in_place, mpi_data, mapStandardMpiOp<T>(op_enum));
-}
-template<typename T> inline
-void MpiCommunicator::allreduceSumInPlace(T& data) {
-	MpiData mpi_data(data, *this);
-	allreduce(mpi_in_place, mpi_data, mapStandardMpiOp<T>(MpiOp::StandardOp::Sum));
-}
-template<typename T, typename A> inline
-void MpiCommunicator::allreduceSumInPlace(std::vector<T,A>& data) {
-	MpiData mpi_data(data, *this);
-	allreduce(mpi_in_place, mpi_data, mapStandardMpiOp<T>(MpiOp::StandardOp::Sum));
+
+
+template<typename T>
+inline
+void MpiCommunicator::allreduceSumInPlace(T& data)
+{
+	allreduceInPlace( data, MpiOp::StandardOp::Sum );
 }
 
 
 //----- Allgather -----//
 
-
-// Receive a single value of primitive type from each rank and put the results
-// into a std::vector
-template<typename T, typename A> inline
-void MpiCommunicator::allgather(const T& value, std::vector<T,A>& received_values)
+template<typename T, typename Container>
+void MpiCommunicator::allgather(const T& data_in, Container& data_out)
 {
-	// Value to send will not actually be modified
-	MpiData send_data( const_cast<T&>(value), *this );
+	// TODO: check convertability instead?
+	using value_type_T = typename MpiDataTraits<T>::value_type;
+	using value_type_C = typename MpiDataTraits<Container>::value_type;
+	static_assert( std::is_same<value_type_T, value_type_C>::value, "type mismatch" );
 
-	// Allocate space in the receive buffer
-	int num_ranks = this->getSize();
-	received_values.resize(num_ranks);
-	MpiData recv_data(received_values, *this);
+	MpiData<T> send_data( const_cast<T&>(data_in), datatype_registry_ );
+	int send_size = send_data.size();
 
-	this->allgather(send_data, recv_data);
+	MpiData<Container> recv_data( data_out, datatype_registry_ );
+	//int recv_size = this->size() * send_size;  // FIXME
+	//recv_data.resize( recv_size );
+
+	// FIXME DEBUG
+	//std::cout << "(rank " << getRank() << ") recv_size = " << recv_data.size() << std::endl;
+
+	// FIXME
+	//using value_type_T = typename MpiData<T>::value_type;
+	//using value_type_C = typename MpiData<Container>::value_type;
+	//static_assert( std::is_same<value_type_T, value_type_C>::value, "type mismatch" );
+
+
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		FANCY_ASSERT( send_data.getDatatype() == recv_data.getDatatype(), "type mismatch" );
+
+		MPI_Allgather( send_data.data(), send_data.size(), send_data.getDatatype(),
+		               recv_data.data(), recv_data.size(), recv_data.getDatatype(),
+		               this->communicator_ );
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}
+#else
+	throw MpiEnvironment::MpiDisabledException();
+#endif // ifdef MPI_ENABLED
 }
+
 
 
 //----- Allgatherv -----//
 
+/*
 template<typename T, typename A>
 void MpiCommunicator::allgatherv(
 	const std::vector<T,A>& send_data, const std::vector<int>& recv_counts,
@@ -910,7 +665,6 @@ void MpiCommunicator::allgatherv(
 	this->allgatherv(mpi_data_send, recv_counts, recv_offsets,
 	                 mpi_data_recv);
 }
-
 
 
 template<typename T, typename A>
@@ -954,5 +708,6 @@ void MpiCommunicator::Iallgatherv(
 	this->Iallgatherv(mpi_data_send, recv_counts, recv_offsets,
 	                  mpi_data_recv, request);
 }
+*/
 
 #endif // ifndef MPI_COMMUNICATOR_H

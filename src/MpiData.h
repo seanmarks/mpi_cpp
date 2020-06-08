@@ -10,86 +10,106 @@
 #include <complex>
 #include <vector>
 
+#include "MpiDataTraits.h"
 #include "MpiDatatype.h"
 #include "utils.h"
 
-class MpiCommunicator;
+// Helper class
+class MpiDatatypeRegistry;
 
+// MpiData - wrapper around an object representing an MPI buffer
+// - Largely a pass-through class that provides a uniform interface for MpiCommunicator functions
+//
 // Wrapper around several variables that define an MPI buffer
-// - A "data element" is a single piece of data of type "data_type"
-// - The difference between "size" and "max_size" has the same semantics
+// - A "data element" in the buffer is a single MPI_Datatype
+// - The difference between "size" and "capacity" has the same semantics
 //   as the difference between std::vector's size and capacity
-// - Note: need to pass an MpiCommunicator to constructors because it contains
-//   the mapping from C++ types to MPI_Datatypes
-// - TODO: Use inheritance to allow extensions?
-class MpiData {
+//
+// - Construct using committed MPI_Datatypes (not the wrapper class, MpiDatatype)
+//   - Decouples construction of buffers from the registration of types
+//   - MpiDatatype construction/destruction also causes commit/free operations
+//
+// - Note: need to pass an MpiDatatypeRegistry to constructors because it contains
+//         the mappings from T --> MPI_Datatype/MpiDatatype
+//
+// - DEVELOPMENT (TODO)
+//   - Specifying the MPI_Datatype in different ways
+//   - Rename to MpiBuffer?
+//
+template<typename Container>
+class MpiData
+{
  public:
-	// Pointer to contiguous block of memory where data may be stored,
-	// and the maximum number of data elements (of type "data_type") 
-	// that can be stored at that location
-	void* data_ptr;
-	int   max_size;
-
-	// Number of elements of MPI_Datatype "data_type" actually stored 
-	// in the buffer
-	int size;
-
-	// Type of data; used to determine the size of the buffer in bytes
-	MPI_Datatype data_type;
-	//MpiDatatype data_type; 
-	// FIXME: need to figure out how to handle comparing types which are equivalent
-
-	//----- Constructors -----//
+	// FIXME
+	//using value_type = typename Container::value_type;
+	//using size_type  = typename Container::size_type;
 
 	// Default: empty
-	MpiData(); 
+	// - TODO: delete?
+	MpiData() {}
 
-	// From a reference to a single element
-	template<typename T> explicit MpiData(T& data, MpiCommunicator& comm);
+	MpiData(
+		Container& data,
+		MpiDatatypeRegistry& registry
+	);
 
-	// From a pointer to a single data element or array of primitive type
-	// - Default: pointer to single element
-	template<typename T> explicit MpiData(T* data_ptr_in, const int num_elements_in, MpiCommunicator& comm);
+	void* data() {
+		return static_cast<void*>( MpiDataTraits<Container>::data(*object_ptr_) );
+	}
+	const void* data() const {
+		return static_cast<void*>( MpiDataTraits<Container>::data(*object_ptr_) );
+	}
 
-	// From a std::vector of a registered MPI type
-	template<typename T, typename A> MpiData(std::vector<T,A>& vec, MpiCommunicator& comm);
+	int size() const {
+		return MpiDataTraits<Container>::size(*object_ptr_);
+	}
+
+	// TODO: remove?
+	// - For C++ containers like a std::vector, not all of the capacity is "useful"
+	//   - Resizing past the current size (even if a reallocation doesn't occur) causes
+	//     the elements from old_size to new_size to be default-constructed, overwriting
+	//     any data that would have been received
+	/*
+	int capacity() const {
+		return MpiDataTraits<Container>::capacity(*object_ptr_);
+		//return capacity_;
+	}
+	*/
+
+	void resize(const int new_size) {
+		return MpiDataTraits<Container>::resize(*object_ptr_, new_size);
+	}
+
+	const MPI_Datatype& getDatatype() const {
+		return data_type_;
+	}
+
+	bool isNull() const {
+		return (object_ptr_ == nullptr);
+	}
+	bool isInitialized() const {
+		return ( ! isNull() );
+	}
+
+ private:
+	// Underlying buffer
+	Container* object_ptr_ = nullptr;  // TODO: better name
+
+	// Type of data stored
+	MPI_Datatype data_type_ = MPI_DATATYPE_NULL;
 };
 
 
-//----- Templates -----//
-
-#include "MpiCommunicator.h"
-
-// From a reference to a supported contiguous type
-template<typename T>
-MpiData::MpiData(T& data, MpiCommunicator& comm)
- : data_ptr( static_cast<void*>(&data) ), 
-   max_size(1),
-   size(1), 
-   data_type( comm.mapMpiDatatype<T>().get_MPI_Datatype() )
-{}
+#include "MpiDatatypeRegistry.h"
 
 
-// From a raw pointer to a supported contiguous type
-template<typename T>
-MpiData::MpiData(T* data_ptr_in, const int num_elements_in, MpiCommunicator& comm)
- : data_ptr( static_cast<void*>(data_ptr_in) ), 
-   max_size(num_elements_in),
-   size(num_elements_in), 
-   data_type( comm.mapMpiDatatype<T>().get_MPI_Datatype() )
-{
-	if ( data_ptr == nullptr ) {
-		size = 0;
-	}
-}
-
-// From a std::vector of a primitive type
-template<typename T, typename A> 
-MpiData::MpiData(std::vector<T,A>& vec, MpiCommunicator& comm)
- : data_ptr( static_cast<void*>(vec.data()) ),
-   max_size(vec.capacity()), 
-   size(vec.size()), 
-   data_type( comm.mapMpiDatatype<T>().get_MPI_Datatype() )
+template<typename Container>
+MpiData<Container>::MpiData(
+	Container& data,
+	MpiDatatypeRegistry& registry
+):
+	object_ptr_( &data ),
+	data_type_( registry.mapMpiDatatype<typename MpiDataTraits<Container>::value_type>().get_MPI_Datatype() )
 {}
 
 #endif /* MPI_DATA_H */

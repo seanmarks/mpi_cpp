@@ -1,16 +1,9 @@
 // MpiDatatype: Wrapper around MPI_Datatype
-// - Automatically handles committing/freeing the type
-//
-// - TODO
-//   - Can MPI_Datatype be swapped?
-//   - MPI_DATATYPE_NULL
-//   - Thread safety
 
 #pragma once
 #ifndef MPI_DATATYPE_H
 #define MPI_DATATYPE_H
 
-#include "MpiEnvironment.h"
 
 // Standard headers
 #include <array>
@@ -22,26 +15,35 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <typeindex>
 #include <typeinfo>
 #include <unordered_map>
 #include <vector>
 
-#include "utils.h"
+#include "Assert.h"
+#include "MpiEnvironment.h"
 
 
 #ifndef MPI_ENABLED
 // Dummy classes for when MPI is not available
 class MPI_Datatype {};
-#endif /* MPI_ENABLED */
+// FIXME
+static const MPI_Datatype MPI_DATATYPE_NULL;
+#endif // MPI_ENABLED
 
 
 class MpiDatatype 
 {
 	friend class MpiCommunicator;
 
+	/*
 	template<typename T>
 	friend class MpiDatatypeRegistrar;
+	*/
+
+	// Object representing MPI_DATATYPE_NULL
+	static const MpiDatatype null;
 
  public:
 	MpiDatatype();
@@ -53,18 +55,18 @@ class MpiDatatype
 	//     the resulting MPI_Datatype is also committed
 	MpiDatatype(const MpiDatatype& mpi_datatype);
 
-	// Copy assignment
+	// Copy assignment operator
 	MpiDatatype& operator=(const MpiDatatype& mpi_datatype);
 
 	// Destructor must clean up underlying MPI_Datatype
-	~MpiDatatype() {
-		free();
-	}
+	// - Note that MPI_Datatypes copied from existing MPI_Datatypes are unaffected
+	//   when the original is freed
+	~MpiDatatype() { free(); }
 
 	// Create and register a contiguous type derived from an existing MpiDatatype
 	MpiDatatype(const MpiDatatype& type, const std::size_t dim);
 
-	// Copy from existing MPI datatype
+	// Copy from existing MPI datatype directly
 	MpiDatatype(const MPI_Datatype& mpi_datatype);
 
 	// Access underlying MPI_Datatype (for calls to MPI routines)
@@ -92,17 +94,13 @@ class MpiDatatype
 	MPI_Datatype mpi_datatype_;
 
 	// Whether the MPI_Datatype was committed
-	bool is_committed_ = false;
+	bool is_allocated_ = false;
 
-	// Commit the type to the MPI core
-	// - If the type has already been committed, it will not be re-committed.
+	// Commit/decommit the type with the MPI core
 	void commit();
-
-	// Free the underlying type from the MPI core
-	// - Will not free the type unless it has been committed
 	void free();
 
-	// Map from C++ types to predefined MPI_Datatypes (e.g. MPI_INT, MPI_DOUBLE, ...)
+	// Map from C++ types to predefined MPI_Datatypes like int, char, ...
 	static const std::unordered_map<std::type_index, MPI_Datatype> primitive_MPI_Datatype_map_;
 };
 
@@ -116,6 +114,9 @@ class MpiDatatype
 template<typename T>
 const MPI_Datatype& MpiDatatype::map_primitive_MPI_Datatype() 
 {
+	// TODO
+	//static_assert(std::is_arithmetic<T>::value_type, "improper usage");
+
 	std::type_index ti(typeid(T));
 	const auto it = primitive_MPI_Datatype_map_.find(ti);
 	if ( it != primitive_MPI_Datatype_map_.end() ) {

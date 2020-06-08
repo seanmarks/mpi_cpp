@@ -1,4 +1,5 @@
 // MpiDatatypeRegistrar: helper class for registering MpiDatatypes
+// - Currently, only arithmetic types are supported (std::is_arithmetic)
 
 #pragma once
 #ifndef MPI_DATATYPE_REGISTRAR_H
@@ -11,6 +12,8 @@
 #include "MpiDatatype.h"
 #include "MpiEnvironment.h"
 
+#include "MpiDatatypeRegistry.h"
+
 
 // Registar for primitive types, and ones that support standard arithmetic operations
 // - Specialize in order to help register more complicated types in a regular fashion
@@ -21,7 +24,8 @@ class MpiDatatypeRegistrar
 	static_assert(std::is_arithmetic<T>::value, "invalid use");
 
 	MpiDatatypeRegistrar() = delete;  // This class is only used for its static templated methods
-	static MpiDatatype makeMpiDatatype(MpiCommunicator& comm);
+	static MpiDatatype makeMpiDatatype(MpiDatatypeRegistry& registry);
+
 	static void registerMpiOps(MpiOp::StandardOpsMap& map);
 
 	static void mpi_sum(T* invec, T* inoutvec, int* len, MPI_Datatype* data_type_ptr){
@@ -45,7 +49,8 @@ class MpiDatatypeRegistrar<std::array<T,dim>>
 
 	MpiDatatypeRegistrar() = delete;  // This class is only used for its static templated methods
 
-	static MpiDatatype makeMpiDatatype(MpiCommunicator& comm);
+	static MpiDatatype makeMpiDatatype(MpiDatatypeRegistry& registry);
+
 	static void registerMpiOps(MpiOp::StandardOpsMap& map);
 
 	static void mpi_sum(Array* invec, Array* inoutvec,
@@ -75,7 +80,8 @@ class MpiDatatypeRegistrar<std::array<std::array<T, dim2>, dim1>>
 
 	MpiDatatypeRegistrar() = delete;  // This class is only used for its static templated methods
 
-	static MpiDatatype makeMpiDatatype(MpiCommunicator& comm);
+	static MpiDatatype makeMpiDatatype(MpiDatatypeRegistry& registry);
+
 	static void registerMpiOps(MpiOp::StandardOpsMap& map);
 
 	static void mpi_sum(Matrix* invec, Matrix* inoutvec, 
@@ -103,7 +109,8 @@ class MpiDatatypeRegistrar<std::complex<T>>
  public:
 	MpiDatatypeRegistrar() = delete;  // This class is only used for its static templated methods
 
-	static MpiDatatype makeMpiDatatype(MpiCommunicator& comm);
+	static MpiDatatype makeMpiDatatype(MpiDatatypeRegistry& registry);
+
 	static void registerMpiOps(MpiOp::StandardOpsMap& map);
 
 	static void mpi_sum(std::complex<T>* invec, std::complex<T>* inoutvec, 
@@ -137,20 +144,14 @@ class MpiDatatypeRegistrar<std::complex<T>>
 
 
 template<typename T>
-MpiDatatype MpiDatatypeRegistrar<T>::makeMpiDatatype(MpiCommunicator& comm)
+MpiDatatype MpiDatatypeRegistrar<T>::makeMpiDatatype(MpiDatatypeRegistry& registry)
 {
 	// Find the corresponding primitive
 	std::type_index ti(typeid(T));
-	const auto primitive_it = MpiDatatype::primitive_MPI_Datatype_map_.find(ti);
-	if ( primitive_it == MpiDatatype::primitive_MPI_Datatype_map_.end() ) {
-		std::stringstream err_ss;
-		err_ss << "Error in " << FANCY_FUNCTION << "\n"
-					 << "  type \"" << ti.name() << "\" is not a recognized MPI primitive type \n"
-					 << "  (NOTE: the type name printed above is implementation-dependent)\n";
-		throw std::runtime_error( err_ss.str() );
-	}
 
-	return MpiDatatype( primitive_it->second );
+	MPI_Datatype data_type = MpiDatatype::map_primitive_MPI_Datatype<T>();
+
+	return MpiDatatype( data_type );
 }
 
 
@@ -170,17 +171,17 @@ void MpiDatatypeRegistrar<T>::registerMpiOps(MpiOp::StandardOpsMap& map)
 
 
 template<typename T, std::size_t dim>
-MpiDatatype MpiDatatypeRegistrar<std::array<T,dim>>::makeMpiDatatype(MpiCommunicator& comm)
+MpiDatatype MpiDatatypeRegistrar<std::array<T,dim>>::makeMpiDatatype(MpiDatatypeRegistry& registry)
 {
 	// First, get the MpiDatatype corresponding to T
-	const MpiDatatype& primitive_type = comm.mapMpiDatatype<T>();
+	const MpiDatatype& primitive_type = registry.mapMpiDatatype<T>();
 
 	// Make a contiguous type
 	MPI_Datatype mpi_array_type;
 	auto count = static_cast<int>(dim);
 #ifdef MPI_ENABLED
 	MPI_Type_contiguous(count, primitive_type.get_MPI_Datatype(), &mpi_array_type);
-#endif /* MPI_ENABLED */
+#endif // MPI_ENABLED
 
 	// Wrap it up in an MpiDatatype and return it
 	return MpiDatatype( mpi_array_type );
@@ -204,10 +205,10 @@ void MpiDatatypeRegistrar<std::array<T,dim>>::registerMpiOps(MpiOp::StandardOpsM
 
 
 template<typename T, std::size_t dim1, std::size_t dim2>
-MpiDatatype MpiDatatypeRegistrar<std::array<std::array<T, dim2>, dim1>>::makeMpiDatatype(MpiCommunicator& comm)
+MpiDatatype MpiDatatypeRegistrar<std::array<std::array<T, dim2>, dim1>>::makeMpiDatatype(MpiDatatypeRegistry& registry)
 {
 	// First, get the MpiDatatype corresponding to T
-	const MpiDatatype& primitive_type = comm.mapMpiDatatype<T>();
+	const MpiDatatype& primitive_type = registry.mapMpiDatatype<T>();
 
 	// Make a contiguous type
 	MPI_Datatype mpi_array_type;
@@ -239,10 +240,10 @@ void MpiDatatypeRegistrar<std::array<std::array<T, dim2>, dim1>>
 
 
 template<typename T>
-MpiDatatype MpiDatatypeRegistrar<std::complex<T>>::makeMpiDatatype(MpiCommunicator& comm)
+MpiDatatype MpiDatatypeRegistrar<std::complex<T>>::makeMpiDatatype(MpiDatatypeRegistry& registry)
 {
 	// First, get the MpiDatatype corresponding to T
-	const MpiDatatype& primitive_type = comm.mapMpiDatatype<T>();
+	const MpiDatatype& primitive_type = registry.mapMpiDatatype<T>();
 
 	// Make a contiguous type with 2 elements
 	MPI_Datatype mpi_complex_type;

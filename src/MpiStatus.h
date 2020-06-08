@@ -1,4 +1,6 @@
 // MpiStatus - wrapper around MPI_Status
+//
+// - Note: MPI_STATUS_IGNORE is a named constant
 
 #pragma once
 #ifndef MPI_STATUS_H
@@ -22,24 +24,22 @@ class MPI_Status
 #endif // MPI_ENABLED
 
 
-// Wrapper around MPI_Status
-// - Note: MPI_STATUS_IGNORE is a named constant of unspecified type, not 'MPI_Status'
 class MpiStatus {
  public:
-	MpiStatus(bool ignore = false):
+	// Default: don't ignore this status
+	MpiStatus(bool ignore = false) noexcept:
 		ignore_(ignore) {}
 
 	// To get an MpiStatus object that behaves as MPI_STATUS_IGNORE, use this constructor
 	// - An alternative would have been to use a static const MpiStatus to represent MPI_STATUS_IGNORE,
 	//   but many functions require a mutable reference as an argument.
-	static MpiStatus Ignore() {
+	static MpiStatus Ignore() noexcept {
 		bool ignore_status = true;
 		return MpiStatus(ignore_status);
 	}
 
 	// Get the number of elements transferred
-	// - Wrapper for private method that deals with actual MPI_Datatype
-	template<typename T>
+	// - Throws if the the status is being ignored, or the datatype is null
 	int getCount() const;
 
 	// Whether this status behaves as MPI_STATUS_IGNORE
@@ -51,30 +51,24 @@ class MpiStatus {
 	}
 
 	// Get status properties
-	bool isCancelled() const {
-		FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
-		int flag = 1;
-#ifdef MPI_ENABLED
-		MPI_Test_cancelled(&status_, &flag);
-#endif // ifdef MPI_ENABLED
-		return static_cast<bool>(flag);
-	}
-	int getSource() const {
-		FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
-		return status_.MPI_SOURCE;
-	}
-	int getTag() const {
-		FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
-		return status_.MPI_TAG;
-	}
-	int getError() const {
-		FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
-		return status_.MPI_ERROR;
-	}
+	bool isCancelled() const;
+	int getSource()    const;
+	int getTag()       const;
+	int getError()     const;
 
 	// Access underlying struct
 	const MPI_Status& get_MPI_Status() const { return status_; };
 	MPI_Status&       access_MPI_Status()    { return status_; };
+
+	// Sets the datatype associated with this status
+	// - Necessary for proper use of getCount()
+	void setDatatype(const MPI_Datatype& datatype) {
+		datatype_ = datatype;
+	}
+
+	const MPI_Datatype& getDatatype() const {
+		return datatype_;
+	}
 
  private:
 	// Underlying MPI Status
@@ -83,18 +77,51 @@ class MpiStatus {
 	// Whether this instance should be treated like MPI_STATUS_IGNORE
 	bool ignore_ = false;  
 
-	// Calls MPI_Get_count on status_ to determine the number
-	// of elements received
-	// TODO update to MpiDatatype?
-	int getCount(const MPI_Datatype& data_type) const;
+	MPI_Datatype datatype_ = MPI_DATATYPE_NULL;
 };
 
 
+inline
+bool MpiStatus::isCancelled() const {
+	FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
+	int flag = 1;
+#ifdef MPI_ENABLED
+	MPI_Test_cancelled(&status_, &flag);
+#endif // ifdef MPI_ENABLED
+	return static_cast<bool>(flag);
+}
+
+
+inline
+int MpiStatus::getSource() const {
+	FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
+	return status_.MPI_SOURCE;
+}
+
+
+inline
+int MpiStatus::getTag() const {
+	FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
+	return status_.MPI_TAG;
+}
+
+
+inline
+int MpiStatus::getError() const {
+	FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
+	return status_.MPI_ERROR;
+}
+
+
+/*
 template<typename T>
 int MpiStatus::getCount() const 
 {
-	// FIXME: What about other registered Datatypes?
+	FANCY_ASSERT( ! ignore(), "improper use of ignored status" );
+
+	// FIXME: General MpiDatatype
 	return getCount( MpiDatatype::map_primitive_MPI_Datatype<T>() );
 }
+*/
 
 #endif // ifndef MPI_STATUS_H

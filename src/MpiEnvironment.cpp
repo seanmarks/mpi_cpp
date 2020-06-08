@@ -10,7 +10,7 @@ bool is_enabled()
 	return true;
 #else
 	return false;
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 }
 
 
@@ -19,7 +19,7 @@ bool is_initialized()
 	int is_init = false;
 #ifdef MPI_ENABLED
 	MPI_Initialized(&is_init);
-#endif /* MPI_ENABLED */
+#endif // ifdef MPI_ENABLED
 	if ( is_init ) { return true;  }
 	else           { return false; }
 }
