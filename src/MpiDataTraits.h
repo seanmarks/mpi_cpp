@@ -44,12 +44,14 @@ struct MpiDataTraits
 {
 	static_assert(std::is_arithmetic<T>::value, "invalid type");
 
-	using size_type     = std::size_t;
-	using value_type    = T;
-	using reference     = T&;
-	using pointer       = T*;
-	using const_pointer = const T*;
-	using element_type  = T;
+	using size_type    = std::size_t;
+	using value_type   = T;
+	using element_type = T;
+
+	using reference       = T&;
+	using const_reference = const T&;
+	using pointer         = T*;
+	using const_pointer   = const T*;
 
 	static size_type size(const T& value) { return 1; }
 
@@ -73,24 +75,26 @@ struct MpiDataTraits
 template<typename T, typename A>
 struct MpiDataTraits<std::vector<T,A>>
 {
+	using Vector = std::vector<T,A>;
+	using size_type    = typename Vector::size_type;
+	using value_type   = typename Vector::value_type;
+	using element_type = typename MpiDataTraits<T>::element_type;
+
+	using reference       = typename Vector::reference;
+	using const_reference = typename Vector::const_reference;
+	using pointer         = typename Vector::pointer;
+	using const_pointer   = typename Vector::const_pointer;
+
 	// For nested types (e.g. std::vector<std::array<V,N>>), the underlying element
 	// must have an arithmetic type
-	using element_type  = typename MpiDataTraits<T>::element_type;
 	static_assert(std::is_arithmetic<element_type>::value, "invalid type");
-
-	using Vector = std::vector<T,A>;
-	using size_type     = std::size_t;  // typename Vector::size_type;
-	using value_type    = T;            // typename Vector::value_type;
-	using reference     = T&;           // typename Vector::reference;
-	using pointer       = T*;           // typename Vector::pointer;
-	using const_pointer = const T*;     // typename Vector::const_pointer;
-
 
 	static size_type size(const Vector& vec) { return vec.size(); }
 
 	static T*       data(Vector& vec)       { return vec.data(); }
 	static const T* data(const Vector& vec) { return vec.data(); }
 
+	// TODO
 	// When a variable-length buffer is used to receive data, it should max out
 	// its size beforehand, and then shrink later
 	static void resize(Vector& vec, const size_type new_size) {
@@ -114,12 +118,14 @@ struct MpiDataTraits<std::array<T,N>>
 	static_assert(N > 0, "invalid size");
 
 	using Array = std::array<T,N>;
-	using size_type     = std::size_t;
-	using value_type    = Array;
-	using reference     = Array&;
-	using pointer       = Array*;
-	using const_pointer = const Array*;
-	using element_type  = T;
+	using size_type    = std::size_t;
+	using value_type   = Array;
+	using element_type = T;
+
+	using reference       = Array&;
+	using const_reference = const Array&;
+	using pointer         = Array*;
+	using const_pointer   = const Array*;
 
 	static size_type size(const Array& array) { return 1; }
 
@@ -147,13 +153,15 @@ struct MpiDataTraits<std::array<std::array<T,NC>, NR>>
 	static_assert(NR > 0, "invalid size");
 	static_assert(NC > 0, "invalid size");
 
-	using Matrix        = std::array<std::array<T,NC>, NR>;
-	using size_type     = std::size_t;
-	using value_type    = Matrix;
-	using reference     = Matrix&;
-	using pointer       = Matrix*;
-	using const_pointer = const Matrix*;
-	using element_type  = T;
+	using Matrix = std::array<std::array<T,NC>, NR>;
+	using size_type    = std::size_t;
+	using value_type   = Matrix;
+	using element_type = T;
+
+	using reference       = Matrix&;
+	using const_reference = const Matrix&;
+	using pointer         = Matrix*;
+	using const_pointer   = const Matrix*;
 
 	static size_type size(const Matrix& matrix) { return 1; }
 
@@ -180,13 +188,15 @@ struct MpiDataTraits<std::complex<T>>
 {
 	static_assert(std::is_arithmetic<T>::value, "invalid type");
 
-	using Complex       = std::complex<T>;
-	using size_type     = std::size_t;
-	using value_type    = Complex;
-	using reference     = Complex&;
-	using pointer       = Complex*;
-	using const_pointer = const Complex*;
-	using element_type  = T;
+	using Complex = std::complex<T>;
+	using size_type    = std::size_t;
+	using value_type   = Complex;
+	using element_type = T;
+
+	using reference       = Complex&;
+	using const_reference = const Complex&;
+	using pointer         = Complex*;
+	using const_pointer   = const Complex*;
 
 	static size_type size(const Complex& value) { return 1; }
 

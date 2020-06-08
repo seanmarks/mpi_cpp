@@ -40,9 +40,9 @@ template<typename Container>
 class MpiData
 {
  public:
-	// FIXME
-	//using value_type = typename Container::value_type;
-	//using size_type  = typename Container::size_type;
+	using value_type   = typename MpiDataTraits<Container>::value_type;
+	using size_type    = typename MpiDataTraits<Container>::size_type;
+	using element_type = typename MpiDataTraits<Container>::element_type;
 
 	// Default: empty
 	// - TODO: delete?
@@ -109,7 +109,7 @@ MpiData<Container>::MpiData(
 	MpiDatatypeRegistry& registry
 ):
 	container_ptr_( &data ),
-	data_type_( registry.mapMpiDatatype<typename MpiDataTraits<Container>::value_type>().get_MPI_Datatype() )
+	data_type_( registry.mapMpiDatatype<value_type>().get_MPI_Datatype() )
 {}
 
 
@@ -119,12 +119,10 @@ template<typename T, typename U>
 struct is_MpiData_same_value_type :
 	std::integral_constant<
 		bool,
-		std::is_same< typename MpiDataTraits< typename std::remove_cv<T>::type >::value_type,
-		              typename MpiDataTraits< typename std::remove_cv<U>::type >::value_type
+		std::is_same< typename MpiData<T>::value_type,
+		              typename MpiData<U>::value_type
 		>::value
 	>
 {};
-
-//static_assert( std::is_same<value_type_T, value_type_C>::value, "type mismatch" );
 
 #endif /* MPI_DATA_H */
