@@ -274,68 +274,40 @@ class MpiCommunicator
 
 	//----- Allgather -----//
 
-
+	// Gather a set of data on all ranks
+	// - If N = data.size(), then recv_data.size() = N*num_ranks
 	template<typename T, typename Container>
 	void allgather(
-		const T&   value,
-		Container& received_values
+		const T&   data,
+		Container& recv_data  // container is resized as needed
 	);
 
 
 	//----- Allgatherv -----//
 
-	/*
-	// Wrapper around underlying MPI_Allgatherv / MPI_Iallgatherv
-	// - TODO: make protected/private?
-	// - Assumes that appropriate blocks have already been prepared, that that
-	//   "recv_data" is the correct size to receive it all
-	// - Variables
-	//     recv_data: buffer for all data received
-	//     recv_offsets: index in "recv_data.data_ptr" at which each block of data starts
-	//     recv_counts: number of elements received
+	// Gathers a variable amount of data from each rank, and distributes it to all ranks
+	// - Assumes that 'recv_counts' are known
+	// - 'recv_offsets[j]' is the offset in 'recv_data' where the data from rank 'j' begins
+	template<typename T, typename Container>
 	void allgatherv(
-		const MpiData&          send_data,
-		const std::vector<int>& recv_counts,
-		const std::vector<int>& recv_offsets,
-		MpiData&                recv_data
-	);
-	void Iallgatherv(
-		const MpiData&          send_data,
-		const std::vector<int>& recv_counts,
-		const std::vector<int>& recv_offsets,
-		MpiData&                recv_data,
-		MpiRequest&             request
+		const T&                send_data,    // data to send from this rank
+		const std::vector<int>& recv_counts,  // number of data elements to receive from each rank
+		// Output
+		Container&        recv_data,    // resized as needed
+		std::vector<int>& recv_offsets
 	);
 
-	// std::vectors of a registered type
-	// - Calls this->allgather() first to determine the number of data elements
+	// Performs an allgather, but does not assume that 'recv_counts' are known
+	// - Calls allgather() first to determine the number of data elements
 	//   to receive from each rank
-	template<typename T, typename A>
+	template<typename T, typename Container>
 	void allgathervWithUnknownCounts(
-		const std::vector<T,A>& send_data,
-		std::vector<T,A>&       recv_data,
-		std::vector<int>&       recv_counts,
-		std::vector<int>&       recv_offsets
+		const T&          send_data,
+		// Output
+		Container&        recv_data,   // resized as needed
+		std::vector<int>& recv_counts,
+		std::vector<int>& recv_offsets
 	);
-
-	// std::vectors of a registered type
-	template<typename T, typename A>
-	void allgatherv(
-		const std::vector<T,A>& send_data,
-		const std::vector<int>& recv_counts,
-		std::vector<T,A>&       recv_data,
-		std::vector<int>&       recv_offsets
-	);
-
-	template<typename T, typename A>
-	void Iallgatherv(
-		const std::vector<T,A>& send_data,
-		const std::vector<int>& recv_counts,
-		std::vector<T,A>&       recv_data,
-		std::vector<int>&       recv_offsets,
-		MpiRequest&             request
-	);
-	*/
 
 
 	//----------------------//
@@ -523,6 +495,7 @@ void MpiCommunicator::bcast(T& data, const int root)
 
 //----- Allreduce -----//
 
+
 template<typename T>
 inline
 void MpiCommunicator::allreduce(const T& data_in, T& data_out, const MpiOp& op)
@@ -545,7 +518,6 @@ void MpiCommunicator::allreduce(const T& data_in, T& data_out, const MpiOp& op)
 	throw MpiEnvironment::MpiDisabledException();
 #endif // ifdef MPI_ENABLED
 }
-
 
 
 template<typename T>
@@ -595,6 +567,7 @@ void MpiCommunicator::allreduceSumInPlace(T& data)
 
 //----- Allgather -----//
 
+
 template<typename T, typename Container>
 void MpiCommunicator::allgather(const T& data_in, Container& data_out)
 {
@@ -633,16 +606,22 @@ void MpiCommunicator::allgather(const T& data_in, Container& data_out)
 }
 
 
-
 //----- Allgatherv -----//
 
-/*
-template<typename T, typename A>
+
+template<typename T, typename Container>
 void MpiCommunicator::allgatherv(
-	const std::vector<T,A>& send_data, const std::vector<int>& recv_counts,
-	std::vector<T,A>& recv_data, std::vector<int>& recv_offsets)
+	const T& send_data, const std::vector<int>& recv_counts,
+  Container& recv_data, std::vector<int>& recv_offsets )
 {
-	// Set up local receive buffer and offsets
+	// TODO: check convertability instead?
+	/*
+	using value_type_T = typename MpiDataTraits<T>::value_type;
+	using value_type_C = typename MpiDataTraits<Container>::value_type;
+	static_assert( std::is_same<value_type_T, value_type_C>::value, "type mismatch" );
+	*/
+
+	// Set up local offsets
 	int num_ranks = this->getSize();
 	recv_offsets.resize(num_ranks);
 	int num_recv_total = 0;
@@ -654,57 +633,41 @@ void MpiCommunicator::allgatherv(
 		}
 		num_recv_total += recv_counts[r];
 	}
-	recv_data.resize(num_recv_total);
 
-	// Gather the data
-	MpiData mpi_data_send( const_cast<std::vector<T,A>&>(send_data), *this );
-	MpiData mpi_data_recv( recv_data, *this );
-	this->allgatherv(mpi_data_send, recv_counts, recv_offsets,
-	                 mpi_data_recv);
+	MpiData<T>         mpi_send_data( const_cast<T&>(send_data), datatype_registry_ );
+	MpiData<Container> mpi_recv_data( recv_data,                 datatype_registry_ );
+	recv_data.resize(num_recv_total);
+	
+#ifdef MPI_ENABLED
+	if ( MpiEnvironment::is_initialized() ) {
+		// MPI_Allgatherv expects non-constant send buffer
+		MPI_Allgatherv( mpi_send_data.data(), mpi_send_data.size(),                    mpi_send_data.getDatatype(),
+		                mpi_recv_data.data(), recv_counts.data(), recv_offsets.data(), mpi_recv_data.getDatatype(),
+		                this->communicator_ );
+	}
+	else {
+		throw MpiEnvironment::MpiUninitializedException();
+	}
+#else
+	throw MpiEnvironment::MpiDisabledException();
+#endif // ifdef MPI_ENABLED
 }
 
 
-template<typename T, typename A>
+template<typename T, typename Container>
 void MpiCommunicator::allgathervWithUnknownCounts(
-	const std::vector<T,A>& send_data,
-	std::vector<T,A>& recv_data, std::vector<int>& recv_counts, std::vector<int>& recv_offsets)
+	const T& send_data,
+	Container& recv_data, std::vector<int>& recv_counts, std::vector<int>& recv_offsets )
 {
 	// First, gather the number of elements that each rank will send.
-	int num_ranks = this->getSize();
+	int num_ranks = this->size();
 	recv_counts.assign(num_ranks, 0);
 	int local_block_size = send_data.size();
-	this->allgather(local_block_size, recv_counts);
+	allgather(local_block_size, recv_counts);
 
-	// Use counts
-	this->allgatherv(send_data, recv_counts, recv_data, recv_offsets);
+	// Share all data
+	allgatherv(send_data, recv_counts, recv_data, recv_offsets);
 }
 
-
-template<typename T, typename A>
-void MpiCommunicator::Iallgatherv(
-	const std::vector<T,A>& send_data, const std::vector<int>& recv_counts,
-	std::vector<T,A>& recv_data, std::vector<int>& recv_offsets, MpiRequest& request)
-{
-	// Set up local receive buffer and offsets
-	int num_ranks = this->getSize();
-	recv_offsets.resize(num_ranks);
-	int num_recv_total = 0;
-	for ( int r=0; r<num_ranks; ++r ) {
-		if ( r == 0 )
-			recv_offsets[r] = 0;
-		else {
-			recv_offsets[r] = recv_offsets[r-1] + recv_counts[r-1];
-		}
-		num_recv_total += recv_counts[r];
-	}
-	recv_data.resize(num_recv_total);
-
-	// Gather the data
-	MpiData mpi_data_send( const_cast<std::vector<T,A>&>(send_data), *this );
-	MpiData mpi_data_recv( recv_data, *this );
-	this->Iallgatherv(mpi_data_send, recv_counts, recv_offsets,
-	                  mpi_data_recv, request);
-}
-*/
 
 #endif // ifndef MPI_COMMUNICATOR_H

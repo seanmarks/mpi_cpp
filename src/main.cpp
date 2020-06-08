@@ -215,6 +215,74 @@ int main(int argc, char* argv[])
 		}
 
 
+		//----- Test allgatherv -----//
+
+		if ( is_master ) {
+			std::cout << "Test allgatherv" << std::endl;
+		}
+		comm.barrier();
+
+		// Each rank 'r' sends a vector with 'r' pieces of data
+		vec.assign(my_rank, my_rank_d);
+		std::vector<int> recv_counts(num_ranks), recv_offsets(num_ranks);
+		for ( int r=0; r<num_ranks; ++r ) {
+			if ( r == 0 ) {
+				recv_offsets[r] = 0;
+			}
+			else {
+				recv_offsets[r] = recv_offsets[r-1] + recv_counts[r-1];
+			}
+			recv_counts[r] = r;
+
+			// Ascending values, starting with local rank
+			vec[r] = my_rank_d + r;
+		}
+
+		std::vector<double> buffer;
+		comm.allgatherv( vec, recv_counts, buffer, recv_offsets );
+
+		FANCY_ASSERT( recv_offsets.size() == recv_counts.size(), "bad size" );
+		for ( int r=0; r<num_ranks; ++r ) {
+			int offset = recv_offsets[r];
+			int count  = recv_counts[r];
+			FANCY_ASSERT( count == r, "bad size" );
+			for ( int i=0; i<count; ++i ) {
+				FANCY_ASSERT( buffer[offset+i] == r + i,
+				              prefix << "buffer(" << r << "," << i << ") = " << buffer[offset+1] << ","
+				              << " expected " << r+i );
+			}
+		}
+
+		// Same as above, but with auto-determined counts
+		recv_counts.clear();
+		comm.allgathervWithUnknownCounts( vec, buffer, recv_counts, recv_offsets );
+		FANCY_ASSERT( recv_counts.size() == static_cast<unsigned>(num_ranks), "bad size" );
+		for ( int r=0; r<num_ranks; ++r ) {
+			int offset = recv_offsets[r];
+			int count  = recv_counts[r];
+			FANCY_ASSERT( count == r, "bad size" );
+			for ( int i=0; i<count; ++i ) {
+				FANCY_ASSERT( buffer[offset+i] == r + i,
+				              prefix << "buffer(" << r << "," << i << ") = " << buffer[offset+1] << ","
+				              << " expected " << r+i );
+			}
+		}
+
+
+
+
+		/*
+		const double my_rank_d = my_rank;
+		vec.resize(0);  // allgather() should resize as needed
+		comm.allgather(my_rank_d, vec);
+
+		FANCY_ASSERT( vec.size() == static_cast<unsigned>(num_ranks), "bad size: " << vec.size() );
+		for ( int r=0; r<num_ranks; ++r ) {
+			FANCY_ASSERT( vec[r] == r,
+				            prefix << "vec[" << r << "] = " << vec[r] << ", expected " << r );
+		}
+		*/
+
 		/*
 		// Misc. MPI op testing
 		std::array<std::array<int,N_DIM>,N_DIM> matrix;

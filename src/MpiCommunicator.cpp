@@ -79,7 +79,6 @@ void MpiCommunicator::probe(const int source, const int tag, MpiStatus& status) 
 		throw MpiEnvironment::MpiUninitializedException();
 	}
 #else
-	(void) status;
 	throw MpiEnvironment::MpiDisabledException();
 #endif // MPI_ENABLED
 }
@@ -104,7 +103,6 @@ bool MpiCommunicator::Iprobe(const int source, const int tag, MpiStatus& status)
 		throw MpiEnvironment::MpiUninitializedException();
 	}
 #else
-	(void) status;
 	throw MpiEnvironment::MpiDisabledException();
 #endif // MPI_ENABLED
 
@@ -200,76 +198,3 @@ void MpiCommunicator::barrier()
 	throw MpiEnvironment::MpiDisabledException();
 #endif // ifdef MPI_ENABLED
 }
-
-
-/*
-void MpiCommunicator::allgather(
-	const MpiData& send_data,
-	MpiData& recv_data)
-{
-#ifdef MPI_ENABLED
-	if ( MpiEnvironment::is_initialized() ) {
-		FANCY_ASSERT( send_data.getDatatype() == recv_data.getDatatype(), "type mismatch" );
-
-		// MPI_Allgather expects non-const inputs
-		auto send_data_ref = const_cast<MpiData&>(send_data);
-
-		MPI_Allgather( send_data_ref.data(), send_data_ref.size(), send_data_ref.getDatatype(),
-		               recv_data.data(),     send_data_ref.size(), send_data_ref.getDatatype(),
-		               this->communicator_ );
-	}
-	else {
-		throw MpiEnvironment::MpiUninitializedException();
-	}
-#else
-	(void) send_data; (void) recv_data;
-	throw MpiEnvironment::MpiDisabledException();
-#endif // ifdef MPI_ENABLED
-}
-*/
-
-/*
-void MpiCommunicator::allgatherv(
-		const MpiData& send_data, const std::vector<int>& recv_counts, const std::vector<int>& recv_offsets,
-		MpiData& recv_data)
-{
-#ifdef MPI_ENABLED
-	if ( MpiEnvironment::is_initialized() ) {
-		// MPI_Allgatherv expects non-constant send buffer
-		auto send_data_ref = const_cast<MpiData&>(send_data);
-		MPI_Allgatherv( send_data_ref.data(), send_data_ref.size(), send_data_ref.getDatatype(),
-		                recv_data.data(), recv_counts.data(), recv_offsets.data(), recv_data.getDatatype(),
-		                this->communicator_ );
-	}
-	else {
-		throw MpiEnvironment::MpiUninitializedException();
-	}
-#else
-	(void) data; (void) recv_offsets; (void) recv_counts; (void) recv_data;
-	throw MpiEnvironment::MpiDisabledException();
-#endif // ifdef MPI_ENABLED
-}
-*/
-
-/*
-void MpiCommunicator::Iallgatherv(
-		const MpiData& data, const std::vector<int>& recv_counts, const std::vector<int>& recv_offsets,
-		MpiData& recv_data, MpiRequest& request)
-{
-#ifdef MPI_ENABLED
-	if ( MpiEnvironment::is_initialized() ) {
-		// MPI_Allgatherv expects non-constant send buffer
-		auto data_ref = const_cast<MpiData&>(data);
-		MPI_Iallgatherv( data_ref.data(), data_ref.size(), data_ref.getDatatype(),
-		                 recv_data.data(), recv_counts.data(), recv_offsets.data(), recv_data.getDatatype(),
-		                 this->communicator_, &request.access_MPI_Request() );
-	}
-	else {
-		throw MpiEnvironment::MpiUninitializedException();
-	}
-#else
-	(void) data; (void) recv_offsets; (void) recv_counts; (void) recv_data;
-	throw MpiEnvironment::MpiDisabledException();
-#endif // ifdef MPI_ENABLED
-}
-*/

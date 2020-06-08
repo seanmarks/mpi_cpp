@@ -103,6 +103,7 @@ class MpiDatatypeRegistrar<std::array<std::array<T, dim2>, dim1>>
 
 
 // Helper class for registering std::complex
+// - TODO: instead use MPI_COMPLEX?
 template<typename T>
 class MpiDatatypeRegistrar<std::complex<T>>
 {
