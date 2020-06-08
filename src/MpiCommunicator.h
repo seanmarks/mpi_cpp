@@ -416,7 +416,7 @@ void MpiCommunicator::send(
 	}
 	else {
 		throw MpiEnvironment::MpiUninitializedException();
-	}	
+	}
 #else
 	throw MpiEnvironment::MpiDisabledException();
 #endif // ifdef MPI_ENABLED
@@ -443,7 +443,7 @@ void MpiCommunicator::recv(T& data, const int source, const int tag, MpiStatus& 
 	}
 	else {
 		throw MpiEnvironment::MpiUninitializedException();
-	}	
+	}
 #else
 	throw MpiEnvironment::MpiDisabledException();
 #endif // ifdef MPI_ENABLED
@@ -465,7 +465,7 @@ void MpiCommunicator::Isend(
 	}
 	else {
 		throw MpiEnvironment::MpiUninitializedException();
-	}	
+	}
 #else
 	throw MpiEnvironment::MpiDisabledException();
 #endif // ifdef MPI_ENABLED
@@ -486,7 +486,7 @@ void MpiCommunicator::Irecv(T& data, const int source, const int tag, MpiRequest
 	}
 	else {
 		throw MpiEnvironment::MpiUninitializedException();
-	}	
+	}
 #else
 	throw MpiEnvironment::MpiDisabledException();
 #endif // ifdef MPI_ENABLED
@@ -607,11 +607,8 @@ void MpiCommunicator::allgather(const T& data_in, Container& data_out)
 	int send_size = send_data.size();
 
 	MpiData<Container> recv_data( data_out, datatype_registry_ );
-	//int recv_size = this->size() * send_size;  // FIXME
-	//recv_data.resize( recv_size );
-
-	// FIXME DEBUG
-	//std::cout << "(rank " << getRank() << ") recv_size = " << recv_data.size() << std::endl;
+	int recv_size = this->getNumRanks() * send_size;
+	recv_data.resize( recv_size );
 
 	// FIXME
 	//using value_type_T = typename MpiData<T>::value_type;
@@ -624,7 +621,7 @@ void MpiCommunicator::allgather(const T& data_in, Container& data_out)
 		FANCY_ASSERT( send_data.getDatatype() == recv_data.getDatatype(), "type mismatch" );
 
 		MPI_Allgather( send_data.data(), send_data.size(), send_data.getDatatype(),
-		               recv_data.data(), recv_data.size(), recv_data.getDatatype(),
+		               recv_data.data(), send_data.size(), recv_data.getDatatype(),
 		               this->communicator_ );
 	}
 	else {

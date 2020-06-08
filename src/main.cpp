@@ -27,14 +27,12 @@ int main(int argc, char* argv[])
 	std::cout << "i is " << type_map[std::type_index(typeid(i))] << '\n';
 	*/
 
-	int my_rank, num_ranks;
-
 	//
 	{
 		MpiCommunicator comm = MpiCommunicator::World();
-		my_rank   = comm.getRank();
-		num_ranks = comm.getSize();
-		bool is_master = comm.isMasterRank();
+		const int my_rank   = comm.getRank();
+		const int num_ranks = comm.getSize();
+		const bool is_master = comm.isMasterRank();
 
 		FANCY_ASSERT( num_ranks >= 2, "these tests cannot be done without at least " << num_ranks << " ranks" );
 
@@ -45,6 +43,7 @@ int main(int argc, char* argv[])
 		for ( int j=0; j<num_ranks; ++j ) {
 			sum += j;
 		}
+		const int sum_of_ranks = sum;
 
 		/*
 		//MpiData mpi_data_scalar(scalar, comm);  // with MpiComm input
@@ -68,6 +67,7 @@ int main(int argc, char* argv[])
 		if ( is_master ) {
 			std::cout << "Test send/recv" << std::endl;
 		}
+		comm.barrier();
 
 		int scalar     = my_rank;
 		int scalar_tag = 0;
@@ -103,6 +103,7 @@ int main(int argc, char* argv[])
 		if ( is_master ) {
 			std::cout << "Test Isend/Irecv" << std::endl;
 		}
+		comm.barrier();
 
 		int len = 10;
 		std::vector<double> vec(len, my_rank);
@@ -128,8 +129,9 @@ int main(int argc, char* argv[])
 		FANCY_ASSERT( scalar_Irecv == source_Irecv,
 		              prefix << " received " << scalar_Irecv << ", expected " << source_Irecv );
 
+		// Clean up send request
 		MpiStatus status;
-		scalar_Isend_request.wait(status);
+		scalar_Isend_request.wait( status );
 
 
 		//----- Test bcast -----//
@@ -137,6 +139,7 @@ int main(int argc, char* argv[])
 		if ( is_master ) {
 			std::cout << "Test bcast" << std::endl;
 		}
+		comm.barrier();
 
 		int bcast_root = 1;
 
@@ -148,7 +151,7 @@ int main(int argc, char* argv[])
 		arr.fill(value);
 
 		comm.bcast( arr, bcast_root );
-	
+
 		for ( int d=0; d<N_DIM; ++d ) {
 			FANCY_ASSERT( arr[d] == expected_value,
 			              prefix << " received arr[" << d << "]=" << arr[d] << ", expected " << expected_value );
@@ -170,65 +173,42 @@ int main(int argc, char* argv[])
 
 
 		//std::cout << prefix << "Testing allreduce_sum_in_place() for an array\n";
-		sum = 0;
-		for ( int r=0; r<num_ranks; ++r ) {
-			sum += r;
-		}
 		arr.fill(my_rank);
 		comm.allreduceInPlace(arr, MpiOp::StandardOp::Sum);
 		for ( int d=0; d<N_DIM; ++d ) {
-			FANCY_ASSERT( arr[d] == sum,
-			              prefix << " arr[" << d << "]=" << arr[d] << ", expected " << sum );
+			FANCY_ASSERT( arr[d] == sum_of_ranks,
+			              prefix << " arr[" << d << "]=" << arr[d] << ", expected " << sum_of_ranks );
 		}
 
 		//std::cout << prefix << "Testing allreduce_sum_in_place() for a vector\n";
 		vec.assign(len, my_rank);
 		comm.allreduceInPlace(vec, MpiOp::StandardOp::Sum);
 		for ( int i=0; i<len; ++i ) {
-			FANCY_ASSERT( vec[i] == sum,
-			              prefix << "vec[" << i << "] = " << vec[i] << ", expected " << sum );
+			FANCY_ASSERT( vec[i] == sum_of_ranks,
+			              prefix << "vec[" << i << "] = " << vec[i] << ", expected " << sum_of_ranks );
 		}
 
 		//std::cout << prefix << "Testing allreduce_sum_in_place() for a complex number\n";
 		std::complex<double> z(my_rank, my_rank);
 		comm.allreduceInPlace(z, MpiOp::StandardOp::Sum);
-		FANCY_ASSERT( z.real() == sum,
-		              prefix << "ERROR: z.real() is " << z.real() << ", expected " << sum );
-		FANCY_ASSERT( z.imag() == sum,
-		              prefix << "ERROR: z.imag() is " << z.imag() << ", expected " << sum );
+		FANCY_ASSERT( z.real() == sum_of_ranks,
+		              prefix << "ERROR: z.real() is " << z.real() << ", expected " << sum_of_ranks );
+		FANCY_ASSERT( z.imag() == sum_of_ranks,
+		              prefix << "ERROR: z.imag() is " << z.imag() << ", expected " << sum_of_ranks );
 
 
 		//----- Test allgather -----//
 
-		// FIXME DEBUG
-		for ( int r=0; r<num_ranks; ++r ) {
-			if ( my_rank == r ) {
-				std::cout << prefix << "rank " << my_rank << std::endl;
-				int len = vec.size();
-				for ( int i=0; i<len; ++i ) {
-					std::cout << prefix << "  vec[" << i << "] = " << vec[i] << std::endl;
-				}
-			}
-			comm.barrier();
+		if ( is_master ) {
+			std::cout << "Test allgather" << std::endl;
 		}
+		comm.barrier();
 
-		double my_rank_d = my_rank;
-		vec.resize(num_ranks);
-		//vec.assign(num_ranks, my_rank);
+		const double my_rank_d = my_rank;
+		vec.resize(0);  // allgather() should resize as needed
 		comm.allgather(my_rank_d, vec);
 
-		// FIXME DEBUG
-		for ( int r=0; r<num_ranks; ++r ) {
-			if ( my_rank == r ) {
-				std::cout << prefix << "rank " << my_rank << ", my_rank_d = " << my_rank_d << std::endl;
-				int len = vec.size();
-				for ( int i=0; i<len; ++i ) {
-					std::cout << prefix << "  vec[" << i << "] = " << vec[i] << std::endl;
-				}
-			}
-			comm.barrier();
-		}
-
+		FANCY_ASSERT( vec.size() == static_cast<unsigned>(num_ranks), "bad size: " << vec.size() );
 		for ( int r=0; r<num_ranks; ++r ) {
 			FANCY_ASSERT( vec[r] == r,
 				            prefix << "vec[" << r << "] = " << vec[r] << ", expected " << r );
@@ -279,14 +259,15 @@ int main(int argc, char* argv[])
 			          << "extent_double = " << extent_double << ", extent_char " << extent_char << "\n";
 		}
 		*/
+
+		if ( is_master ) {
+			std::cout << "\nTest: Success!" << std::endl;
+		}
 	}
 
 	// Finish MPI
 	MpiEnvironment::finalize();
 
-	if ( my_rank == 0 ) {
-		std::cout << "\nTest: Success!" << std::endl;
-	}
 
 	return 0;
 }

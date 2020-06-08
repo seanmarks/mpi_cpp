@@ -54,14 +54,14 @@ class MpiData
 	);
 
 	void* data() {
-		return static_cast<void*>( MpiDataTraits<Container>::data(*object_ptr_) );
+		return static_cast<void*>( MpiDataTraits<Container>::data(*container_ptr_) );
 	}
 	const void* data() const {
-		return static_cast<void*>( MpiDataTraits<Container>::data(*object_ptr_) );
+		return static_cast<const void*>( MpiDataTraits<Container>::data(*container_ptr_) );
 	}
 
 	int size() const {
-		return MpiDataTraits<Container>::size(*object_ptr_);
+		return MpiDataTraits<Container>::size(*container_ptr_);
 	}
 
 	// TODO: remove?
@@ -71,13 +71,13 @@ class MpiData
 	//     any data that would have been received
 	/*
 	int capacity() const {
-		return MpiDataTraits<Container>::capacity(*object_ptr_);
+		return MpiDataTraits<Container>::capacity(*container_ptr_);
 		//return capacity_;
 	}
 	*/
 
 	void resize(const int new_size) {
-		return MpiDataTraits<Container>::resize(*object_ptr_, new_size);
+		return MpiDataTraits<Container>::resize(*container_ptr_, new_size);
 	}
 
 	const MPI_Datatype& getDatatype() const {
@@ -85,7 +85,7 @@ class MpiData
 	}
 
 	bool isNull() const {
-		return (object_ptr_ == nullptr);
+		return (container_ptr_ == nullptr);
 	}
 	bool isInitialized() const {
 		return ( ! isNull() );
@@ -93,7 +93,7 @@ class MpiData
 
  private:
 	// Underlying buffer
-	Container* object_ptr_ = nullptr;  // TODO: better name
+	Container* container_ptr_ = nullptr;  // TODO: better name
 
 	// Type of data stored
 	MPI_Datatype data_type_ = MPI_DATATYPE_NULL;
@@ -108,7 +108,7 @@ MpiData<Container>::MpiData(
 	Container& data,
 	MpiDatatypeRegistry& registry
 ):
-	object_ptr_( &data ),
+	container_ptr_( &data ),
 	data_type_( registry.mapMpiDatatype<typename MpiDataTraits<Container>::value_type>().get_MPI_Datatype() )
 {}
 

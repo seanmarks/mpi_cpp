@@ -46,8 +46,7 @@ struct MpiDataTraits
 	using pointer       = T*;
 	using const_pointer = const T*;
 
-	static size_type size(const T& value)     { return 1; }
-	static size_type capacity(const T& value) { return 1; }
+	static size_type size(const T& value) { return 1; }
 
 	static T*       data(T& value)       { return &value; }
 	static const T* data(const T& value) { return &value; }
@@ -56,9 +55,12 @@ struct MpiDataTraits
 		FANCY_ASSERT( new_size == 1, "invalid size" );
 	}
 
+	/*
+	static size_type capacity(const T& value) { return 1; }
 	static void resizeToCapacity(T& value) {
 		return;
 	}
+	*/
 };
 
 
@@ -76,8 +78,7 @@ struct MpiDataTraits<std::vector<T,A>>
 	using const_pointer = const T*;     // typename Vector::const_pointer;
 
 
-	static size_type size(const Vector& vec)     { return vec.size();     }
-	static size_type capacity(const Vector& vec) { return vec.capacity(); }
+	static size_type size(const Vector& vec) { return vec.size(); }
 
 	static T*       data(Vector& vec)       { return vec.data(); }
 	static const T* data(const Vector& vec) { return vec.data(); }
@@ -87,9 +88,13 @@ struct MpiDataTraits<std::vector<T,A>>
 	static void resize(Vector& vec, const size_type new_size) {
 		vec.resize( new_size );
 	}
+
+	/*
+	static size_type capacity(const Vector& vec) { return vec.capacity(); }
 	static void resizeToCapacity(Vector& vec) {
 		vec.resize( vec.capacity() );
 	}
+	*/
 };
 
 
@@ -107,8 +112,7 @@ struct MpiDataTraits<std::array<T,N>>
 	using pointer       = Array*;
 	using const_pointer = const Array*;
 
-	static size_type size(const Array& array)     { return 1; }
-	static size_type capacity(const Array& array) { return 1; }
+	static size_type size(const Array& array) { return 1; }
 
 	static T*       data(Array&       array) { return array.data(); }
 	static const T* data(const Array& array) { return array.data(); }
@@ -117,9 +121,12 @@ struct MpiDataTraits<std::array<T,N>>
 		FANCY_ASSERT( new_size == 1, "invalid size" );
 	}
 
+	/*
+	static size_type capacity(const Array& array) { return 1; }
 	static void resizeToCapacity(Array& array) {
 		return;
 	}
+	*/
 };
 
 
@@ -138,8 +145,7 @@ struct MpiDataTraits<std::array<std::array<T,NC>, NR>>
 	using pointer       = Matrix*;
 	using const_pointer = const Matrix*;
 
-	static size_type size(const Matrix& matrix)     { return 1; }
-	static size_type capacity(const Matrix& matrix) { return 1; }
+	static size_type size(const Matrix& matrix) { return 1; }
 
 	// Return pointers to the start of the first *inner* array
 	static T*       data(Matrix&       matrix) { return matrix[0].data(); }
@@ -149,9 +155,12 @@ struct MpiDataTraits<std::array<std::array<T,NC>, NR>>
 		FANCY_ASSERT( new_size == 1, "invalid size" );
 	}
 
+	/*
+	static size_type capacity(const Matrix& matrix) { return 1; }
 	static void resizeToCapacity(Matrix& matrix) {
 		return;
 	}
+	*/
 };
 
 
@@ -168,8 +177,7 @@ struct MpiDataTraits<std::complex<T>>
 	using pointer       = Complex*;
 	using const_pointer = const Complex*;
 
-	static size_type size(const Complex& value)     { return 1; }
-	static size_type capacity(const Complex& value) { return 1; }
+	static size_type size(const Complex& value) { return 1; }
 
 	static Complex*       data(Complex& value)       { return &value; }
 	static const Complex* data(const Complex& value) { return &value; }
@@ -178,9 +186,12 @@ struct MpiDataTraits<std::complex<T>>
 		FANCY_ASSERT( new_size == 1, "invalid size" );
 	}
 
+	/*
+	static size_type capacity(const Complex& value) { return 1; }
 	static void resizeToCapacity(Complex& value) {
 		return;
 	}
+	*/
 };
 
 
