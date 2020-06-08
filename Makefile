@@ -1,3 +1,6 @@
+# Bare-bones Makefile for mpi_cpp
+# - Written by Sean M. Marks (https://github.com/seanmarks)
+
 # NOTES:
 # -g	Extra symbolic debugging info for use with the gdb debugger
 # -o	Specify output file name
@@ -27,14 +30,12 @@ PROJECT=test_mpi
 ### Flags ###
 #############
 
-# DLIB
-
 # Compiler flags
 # - Misc: -Wno-comment -Wno-sign-compare -DPLUMED_MODE
 CXXFLAGS += -g -std=c++11 -DCPLUSPLUS -Wall
 # - Optimizations
 CXXFLAGS += -O3
-# CXXFLAGS += -ffast-math -march=native    # less safe optimizations
+# CXXFLAGS += -ffast-math -march=native   # more optimizations
 # - Enable MPI
 CXXFLAGS += -DMPI_ENABLED
 
@@ -106,8 +107,3 @@ $(PROJECT) : $(OBJECTS)
 .PHONY : clean	
 clean :
 	rm -rf $(BUILD_DIR)/*
-
-# Clean up install directory
-#.PHONY : clean_install
-#clean_install :
-#	rm -rf $(INSTALL_DIR)/*
