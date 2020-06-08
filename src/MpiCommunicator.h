@@ -571,10 +571,7 @@ void MpiCommunicator::allreduceSumInPlace(T& data)
 template<typename T, typename Container>
 void MpiCommunicator::allgather(const T& data_in, Container& data_out)
 {
-	// TODO: check convertability instead?
-	using value_type_T = typename MpiDataTraits<T>::value_type;
-	using value_type_C = typename MpiDataTraits<Container>::value_type;
-	static_assert( std::is_same<value_type_T, value_type_C>::value, "type mismatch" );
+	static_assert(is_MpiData_same_value_type<T,Container>::value, "type mismatch");
 
 	MpiData<T> send_data( const_cast<T&>(data_in), datatype_registry_ );
 	int send_size = send_data.size();
@@ -582,12 +579,6 @@ void MpiCommunicator::allgather(const T& data_in, Container& data_out)
 	MpiData<Container> recv_data( data_out, datatype_registry_ );
 	int recv_size = this->getNumRanks() * send_size;
 	recv_data.resize( recv_size );
-
-	// FIXME
-	//using value_type_T = typename MpiData<T>::value_type;
-	//using value_type_C = typename MpiData<Container>::value_type;
-	//static_assert( std::is_same<value_type_T, value_type_C>::value, "type mismatch" );
-
 
 #ifdef MPI_ENABLED
 	if ( MpiEnvironment::is_initialized() ) {
@@ -614,12 +605,7 @@ void MpiCommunicator::allgatherv(
 	const T& send_data, const std::vector<int>& recv_counts,
   Container& recv_data, std::vector<int>& recv_offsets )
 {
-	// TODO: check convertability instead?
-	/*
-	using value_type_T = typename MpiDataTraits<T>::value_type;
-	using value_type_C = typename MpiDataTraits<Container>::value_type;
-	static_assert( std::is_same<value_type_T, value_type_C>::value, "type mismatch" );
-	*/
+	static_assert(is_MpiData_same_value_type<T,Container>::value, "type mismatch");
 
 	// Set up local offsets
 	int num_ranks = this->getSize();

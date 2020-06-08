@@ -112,4 +112,19 @@ MpiData<Container>::MpiData(
 	data_type_( registry.mapMpiDatatype<typename MpiDataTraits<Container>::value_type>().get_MPI_Datatype() )
 {}
 
+
+// Compare type traits for MpiData: true if containers MpiData<T> and MpiData<U>
+// contain data of the same type
+template<typename T, typename U>
+struct is_MpiData_same_value_type :
+	std::integral_constant<
+		bool,
+		std::is_same< typename MpiDataTraits< typename std::remove_cv<T>::type >::value_type,
+		              typename MpiDataTraits< typename std::remove_cv<U>::type >::value_type
+		>::value
+	>
+{};
+
+//static_assert( std::is_same<value_type_T, value_type_C>::value, "type mismatch" );
+
 #endif /* MPI_DATA_H */
